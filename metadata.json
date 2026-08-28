@@ -1,0 +1,6 @@
+{
+  "name": "Vishwajit Pawar - 3D Engineer's Lab",
+  "description": "Interactive 3D futuristic robotics laboratory and engineering portfolio for Vishwajit Laxman Pawar, featuring Embedded Systems, IoT, Robotics, AI, and interactive hardware visualizations.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
