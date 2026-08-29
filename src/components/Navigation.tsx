@@ -8,6 +8,7 @@ interface NavigationProps {
   onOpenResume: () => void;
   onOpenCopilot?: (tab?: 'chat' | 'match' | 'interview' | 'deepdive') => void;
   onOpenGuide?: () => void;
+  onOpenRecruiterBrief?: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
 }
@@ -16,6 +17,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   onOpenResume,
   onOpenCopilot,
   onOpenGuide,
+  onOpenRecruiterBrief,
   soundEnabled,
   onToggleSound,
 }) => {
@@ -29,6 +31,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     { label: 'ABOUT', href: '#about', id: 'about' },
     { label: 'SKILLS', href: '#skills', id: 'skills' },
     { label: 'PROJECTS', href: '#projects', id: 'projects' },
+    { label: 'WORKBENCH', href: '#hardware-workbench', id: 'hardware-workbench' },
     { label: 'EXPERIENCE', href: '#experience', id: 'experience' },
     { label: 'EDUCATION', href: '#education', id: 'education' },
     { label: 'CONTACT', href: '#contact', id: 'contact' },
@@ -150,6 +153,22 @@ export const Navigation: React.FC<NavigationProps> = ({
             {soundEnabled ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4" />}
           </button>
 
+          {/* Recruiter Fast Track 60s Briefing */}
+          {onOpenRecruiterBrief && (
+            <button
+              onClick={() => {
+                soundFx.playClick();
+                onOpenRecruiterBrief();
+              }}
+              id="nav-recruiter-brief-btn"
+              title="60-Second Recruiter Briefing & Executive Summary"
+              className="hidden xl:flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/60 text-emerald-300 text-xs font-mono font-bold transition-all shadow-[0_0_12px_rgba(16,185,129,0.25)] cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span>RECRUITER 60s</span>
+            </button>
+          )}
+
           {/* AI Copilot Trigger */}
           {onOpenCopilot && (
             <button
@@ -224,6 +243,20 @@ export const Navigation: React.FC<NavigationProps> = ({
           </div>
 
           <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
+            {onOpenRecruiterBrief && (
+              <button
+                onClick={() => {
+                  soundFx.playClick();
+                  setMobileMenuOpen(false);
+                  onOpenRecruiterBrief();
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-950/90 border border-emerald-500/80 text-emerald-300 text-xs font-bold shadow-[0_0_15px_rgba(16,185,129,0.25)]"
+              >
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                RECRUITER 60-SECOND BRIEFING
+              </button>
+            )}
+
             {onOpenCopilot && (
               <button
                 onClick={() => {

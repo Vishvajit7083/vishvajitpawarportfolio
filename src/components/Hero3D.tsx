@@ -9,9 +9,10 @@ interface Hero3DProps {
   onExploreClick?: () => void;
   onOpenResume: () => void;
   onOpenCopilot?: () => void;
+  onOpenRecruiterBrief?: () => void;
 }
 
-export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, onOpenCopilot }) => {
+export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, onOpenCopilot, onOpenRecruiterBrief }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isHovering3D, setIsHovering3D] = useState(false);
   const [robotAction, setRobotAction] = useState<string>('AUTONOMOUS PATROL');
@@ -465,6 +466,21 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
               <Sparkles className="w-4 h-4" />
               <span>EXPLORE LAB</span>
             </button>
+
+            {onOpenRecruiterBrief && (
+              <button
+                id="hero-recruiter-brief-btn"
+                onClick={() => {
+                  sound.playClick();
+                  onOpenRecruiterBrief();
+                }}
+                onMouseEnter={() => sound.playHover()}
+                className="px-5 py-3 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 font-mono text-xs sm:text-sm font-bold tracking-wider flex items-center gap-2 border border-emerald-500/70 shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all transform hover:-translate-y-0.5 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <span>RECRUITER 60s BRIEF</span>
+              </button>
+            )}
 
             {onOpenCopilot && (
               <button

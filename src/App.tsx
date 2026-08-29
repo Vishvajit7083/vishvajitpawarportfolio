@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { LoadingScreen } from './components/LoadingScreen';
 import { Navigation } from './components/Navigation';
 import { Hero3D } from './components/Hero3D';
+import { EngineeringMetrics } from './components/EngineeringMetrics';
 import { About } from './components/About';
 import { SkillsNetwork } from './components/SkillsNetwork';
 import { RobotProject } from './components/RobotProject';
 import { WeatherProject } from './components/WeatherProject';
+import { HardwareWorkbench } from './components/HardwareWorkbench';
 import { ExperienceTimeline } from './components/ExperienceTimeline';
 import { Education } from './components/Education';
 import { Certifications } from './components/Certifications';
@@ -13,6 +15,7 @@ import { Languages } from './components/Languages';
 import { Contact } from './components/Contact';
 import { Footer } from './components/Footer';
 import { ResumeModal } from './components/ResumeModal';
+import { RecruiterFastTrackModal } from './components/RecruiterFastTrackModal';
 import { GlobalVoiceAssistant } from './components/GlobalVoiceAssistant';
 import { AIEngineeringCopilot } from './components/AIEngineeringCopilot';
 import { AIGuideModal } from './components/AIGuideModal';
@@ -23,6 +26,7 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 function PortfolioApp() {
   const [isLoading, setIsLoading] = useState(true);
   const [resumeOpen, setResumeOpen] = useState(false);
+  const [recruiterBriefOpen, setRecruiterBriefOpen] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotTab, setCopilotTab] = useState<'chat' | 'match' | 'interview' | 'deepdive'>('chat');
   const [guideOpen, setGuideOpen] = useState(false);
@@ -48,6 +52,7 @@ function PortfolioApp() {
       {/* Floating Futuristic Navigation */}
       <Navigation
         onOpenResume={() => setResumeOpen(true)}
+        onOpenRecruiterBrief={() => setRecruiterBriefOpen(true)}
         onOpenCopilot={handleOpenCopilot}
         onOpenGuide={() => setGuideOpen(true)}
         soundEnabled={soundEnabled}
@@ -60,33 +65,40 @@ function PortfolioApp() {
         <Hero3D
           onOpenResume={() => setResumeOpen(true)}
           onOpenCopilot={() => handleOpenCopilot('chat')}
+          onOpenRecruiterBrief={() => setRecruiterBriefOpen(true)}
         />
 
-        {/* 2. Holographic Profile & About Me */}
+        {/* 2. Key Hardware & Architectural Benchmarks */}
+        <EngineeringMetrics />
+
+        {/* 3. Holographic Profile & About Me */}
         <About />
 
-        {/* 3. 3D Connected Skills Network Constellation */}
+        {/* 4. 3D Connected Skills Network Constellation */}
         <SkillsNetwork />
 
-        {/* 4. Project 1: AI-Assisted Robot */}
+        {/* 5. Project 1: AI-Assisted Robot */}
         <RobotProject />
 
-        {/* 5. Project 2: IoT-Based Weather Monitoring System */}
+        {/* 6. Project 2: IoT-Based Weather Monitoring System */}
         <WeatherProject />
 
-        {/* 6. Career Timeline & Virtual Job Simulations */}
+        {/* 7. Interactive Hardware & Architecture Workbench (FreeRTOS & 6-DOF Kinematics & Logic Analyzer) */}
+        <HardwareWorkbench />
+
+        {/* 8. Career Timeline & Virtual Job Simulations */}
         <ExperienceTimeline />
 
-        {/* 7. 3D Education & Degree Credentials */}
+        {/* 9. 3D Education & Degree Credentials */}
         <Education />
 
-        {/* 8. Floating Certification Cards */}
+        {/* 10. Floating Certification Cards */}
         <Certifications />
 
-        {/* 9. Multilingual Linguistic Capabilities */}
+        {/* 11. Multilingual Linguistic Capabilities */}
         <Languages />
 
-        {/* 10. Futuristic Contact Terminal */}
+        {/* 12. Futuristic Contact Terminal */}
         <Contact onOpenResume={() => setResumeOpen(true)} />
       </main>
 
@@ -117,6 +129,14 @@ function PortfolioApp() {
 
       {/* Formatted Printable Resume Modal */}
       <ResumeModal isOpen={resumeOpen} onClose={() => setResumeOpen(false)} />
+
+      {/* 60-Second Recruiter Briefing Modal */}
+      <RecruiterFastTrackModal
+        isOpen={recruiterBriefOpen}
+        onClose={() => setRecruiterBriefOpen(false)}
+        onOpenResume={() => setResumeOpen(true)}
+        onOpenCopilot={handleOpenCopilot}
+      />
 
       {/* AI Engineering Copilot Modal */}
       <AIEngineeringCopilot
