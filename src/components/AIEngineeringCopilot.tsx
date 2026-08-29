@@ -150,6 +150,30 @@ How can I assist your evaluation today?`,
   // Clipboard Copied State
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Engine status
+  const [engineStatus, setEngineStatus] = useState<{
+    activeEngine: string;
+    modelName: string;
+    openRouterConfigured: boolean;
+    geminiConfigured: boolean;
+  }>({
+    activeEngine: 'OpenRouter / Gemini',
+    modelName: 'AI Engine',
+    openRouterConfigured: false,
+    geminiConfigured: false,
+  });
+
+  useEffect(() => {
+    fetch('/api/copilot/status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.activeEngine) {
+          setEngineStatus(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (initialTab) {
       setActiveTab(initialTab);
@@ -362,8 +386,9 @@ How can I assist your evaluation today?`,
                   <h2 className="text-base sm:text-lg font-bold tracking-wide font-display text-[var(--text-primary)]">
                     AI ENGINEERING COPILOT
                   </h2>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400 text-cyan-300 font-semibold hidden sm:inline-block">
-                    GEMINI 3.7 FLASH
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400 text-cyan-300 font-semibold hidden sm:inline-flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    {engineStatus.activeEngine.toUpperCase()}
                   </span>
                 </div>
                 <p className="text-[11px] text-[var(--text-muted)]">

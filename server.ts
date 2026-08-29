@@ -30,6 +30,135 @@ function getGeminiClient(): GoogleGenAI | null {
   return geminiClient;
 }
 
+// OpenRouter API Caller (powers OpenRouter AI Copilot & Voice Assistant)
+interface OpenRouterMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+interface OpenRouterOptions {
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  responseFormatJson?: boolean;
+}
+
+// Universal robust JSON parser for LLM outputs
+function safeJsonParse<T = any>(text: string | null | undefined): T | null {
+  if (!text || typeof text !== 'string') return null;
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // 1. Try stripping markdown ```json ... ``` or ``` ... ```
+    const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (codeBlockMatch) {
+      try {
+        return JSON.parse(codeBlockMatch[1].trim());
+      } catch {}
+    }
+    // 2. Try extracting outermost { ... }
+    const firstBrace = trimmed.indexOf('{');
+    const lastBrace = trimmed.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+      } catch {}
+    }
+    // 3. Try extracting outermost [ ... ]
+    const firstBracket = trimmed.indexOf('[');
+    const lastBracket = trimmed.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+      try {
+        return JSON.parse(trimmed.slice(firstBracket, lastBracket + 1));
+      } catch {}
+    }
+    return null;
+  }
+}
+
+const DEFAULT_OPENROUTER_FALLBACK_MODELS = [
+  'google/gemini-2.5-flash',
+  'google/gemini-2.0-flash',
+  'google/gemini-flash-1.5',
+  'meta-llama/llama-3.3-70b-instruct',
+  'deepseek/deepseek-chat',
+  'mistralai/mistral-small-24b-instruct-2501',
+  'openrouter/auto',
+];
+
+async function callOpenRouter(
+  messages: OpenRouterMessage[],
+  options?: OpenRouterOptions
+): Promise<string | null> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return null;
+
+  const candidateModels = [
+    options?.model,
+    process.env.OPENROUTER_MODEL,
+    ...DEFAULT_OPENROUTER_FALLBACK_MODELS,
+  ].filter((m, idx, arr): m is string => Boolean(m) && arr.indexOf(m) === idx);
+
+  for (const model of candidateModels) {
+    try {
+      const payload: Record<string, unknown> = {
+        model,
+        messages,
+        temperature: options?.temperature ?? 0.3,
+        max_tokens: options?.maxTokens ?? 1600,
+      };
+
+      if (options?.responseFormatJson) {
+        payload.response_format = { type: 'json_object' };
+      }
+
+      let res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
+          'X-Title': "Vishwajit Pawar Engineering Lab Copilot",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      // If response format wasn't supported (some models return 400 with response_format), retry without response_format
+      if (!res.ok && options?.responseFormatJson && res.status === 400) {
+        delete payload.response_format;
+        res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
+            'X-Title': "Vishwajit Pawar Engineering Lab Copilot",
+          },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn(`[OpenRouter Model ${model} status ${res.status}]:`, errText);
+        // Continue loop to try next model in fallback chain
+        continue;
+      }
+
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (typeof content === 'string' && content.trim().length > 0) {
+        return content.trim();
+      }
+    } catch (err) {
+      console.warn(`[OpenRouter exception on model ${model}]:`, err);
+    }
+  }
+
+  return null;
+}
+
 // Comprehensive grounded knowledge base for Vishwajit Laxman Pawar
 const VISHWAJIT_PORTFOLIO_GROUNDING = `
 CANDIDATE PROFILE:
@@ -307,7 +436,40 @@ app.post('/api/voice-assistant', async (req, res) => {
       return res.json(localResult);
     }
 
-    // 2. Google Gemini API (Primary high-performance engine)
+    // 2. OpenRouter API (if OPENROUTER_API_KEY provided)
+    if (process.env.OPENROUTER_API_KEY) {
+      try {
+        const rawContent = await callOpenRouter([
+          { role: 'system', content: ASSISTANT_SYSTEM_PROMPT },
+          { role: 'user', content: `User query: "${trimmed}". Current section: "${currentSection || 'hero'}". Respond with valid JSON.` },
+        ], {
+          responseFormatJson: true,
+          temperature: 0.3,
+          maxTokens: 300,
+        });
+
+        if (rawContent) {
+          const parsed = safeJsonParse<{ reply?: string; action?: string; target?: string | null }>(rawContent);
+          if (parsed && parsed.reply) {
+            return res.json({
+              reply: parsed.reply,
+              action: parsed.action || "none",
+              target: parsed.target || null,
+            });
+          } else {
+            return res.json({
+              reply: rawContent,
+              action: 'none',
+              target: null,
+            });
+          }
+        }
+      } catch (orErr) {
+        console.warn('OpenRouter voice call failed, trying Gemini:', orErr);
+      }
+    }
+
+    // 3. Google Gemini API (High-performance secondary engine)
     const gemini = getGeminiClient();
     if (gemini) {
       try {
@@ -327,58 +489,11 @@ app.post('/api/voice-assistant', async (req, res) => {
         });
 
         if (response.text) {
-          const parsed = JSON.parse(response.text);
-          return res.json(parsed);
+          const parsed = safeJsonParse(response.text);
+          if (parsed) return res.json(parsed);
         }
       } catch (geminiErr) {
         console.warn('Gemini API call failed, falling back to intelligent handler:', geminiErr);
-      }
-    }
-
-    // 3. OpenRouter API fallback (if OPENROUTER_API_KEY provided)
-    if (process.env.OPENROUTER_API_KEY) {
-      try {
-        const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
-            'X-Title': "Vishwajit Pawar Engineering Lab",
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.0-flash-001',
-            messages: [
-              { role: 'system', content: ASSISTANT_SYSTEM_PROMPT },
-              { role: 'user', content: `User query: "${trimmed}". Current section: "${currentSection || 'hero'}". Respond with valid JSON.` },
-            ],
-            response_format: { type: 'json_object' },
-            temperature: 0.3,
-            max_tokens: 300,
-          }),
-        });
-
-        if (openRouterResponse.ok) {
-          const data = await openRouterResponse.json();
-          const rawContent = data.choices?.[0]?.message?.content;
-          if (rawContent) {
-            try {
-              const parsed = JSON.parse(rawContent);
-              return res.json({
-                reply: parsed.reply || "Command executed successfully.",
-                action: parsed.action || "none",
-                target: parsed.target || null,
-              });
-            } catch {
-              return res.json({
-                reply: rawContent,
-                action: 'none',
-              });
-            }
-          }
-        }
-      } catch (orErr) {
-        console.warn('OpenRouter fallback failed:', orErr);
       }
     }
 
@@ -398,8 +513,32 @@ app.post('/api/voice-assistant', async (req, res) => {
 });
 
 // ============================================================================
-// AI ENGINEERING COPILOT & RECRUITER SUITE ENDPOINTS (Gemini 3.7 Flash)
+// AI ENGINEERING COPILOT & RECRUITER SUITE ENDPOINTS (OpenRouter / Gemini 3.7 Flash)
 // ============================================================================
+
+// 0. AI Status Endpoint
+app.get('/api/copilot/status', (req, res) => {
+  const hasOpenRouter = !!process.env.OPENROUTER_API_KEY;
+  const hasGemini = !!process.env.GEMINI_API_KEY;
+
+  let activeEngine = 'Embedded Local Brain';
+  let modelName = 'Deterministic Embedded Engine';
+
+  if (hasOpenRouter) {
+    activeEngine = 'OpenRouter AI';
+    modelName = process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash';
+  } else if (hasGemini) {
+    activeEngine = 'Gemini 3.7 Flash';
+    modelName = 'gemini-3.7-flash';
+  }
+
+  res.json({
+    openRouterConfigured: hasOpenRouter,
+    geminiConfigured: hasGemini,
+    activeEngine,
+    modelName,
+  });
+});
 
 // 1. Interactive Recruiter AI Copilot Chat
 app.post('/api/copilot/chat', async (req, res) => {
@@ -409,14 +548,7 @@ app.post('/api/copilot/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    const gemini = getGeminiClient();
-    if (gemini) {
-      try {
-        const conversationContext = Array.isArray(history)
-          ? history.slice(-6).map((h: { role: string; text: string }) => `${h.role === 'user' ? 'Visitor' : 'Assistant'}: ${h.text}`).join('\n')
-          : '';
-
-        const systemPrompt = `
+    const systemPrompt = `
 You are the AI Engineering Copilot & Recruiter Representative for Vishwajit Laxman Pawar's Portfolio.
 ${VISHWAJIT_PORTFOLIO_GROUNDING}
 
@@ -427,6 +559,60 @@ Your role:
 - Format responses cleanly with brief bullet points or bold text where appropriate for high readability.
 - Suggest 2-3 relevant follow-up questions at the very end in a separate section labeled "SUGGESTED_QUESTIONS: [q1 | q2 | q3]".
 `;
+
+    // 1. Check OpenRouter API (if OPENROUTER_API_KEY is configured)
+    if (process.env.OPENROUTER_API_KEY) {
+      try {
+        const orMessages: OpenRouterMessage[] = [
+          { role: 'system', content: systemPrompt },
+        ];
+
+        if (Array.isArray(history)) {
+          for (const h of history.slice(-6)) {
+            orMessages.push({
+              role: h.role === 'user' ? 'user' : 'assistant',
+              content: h.text,
+            });
+          }
+        }
+
+        orMessages.push({ role: 'user', content: message });
+
+        const orResponse = await callOpenRouter(orMessages, { temperature: 0.4 });
+        if (orResponse) {
+          let reply = orResponse;
+          let suggestedQuestions: string[] = [
+            "How did Vishwajit implement FreeRTOS on the ESP32?",
+            "Can you explain his 6-axis robotic arm kinematics?",
+            "What is his background from Bharati Vidyapeeth Kolhapur?"
+          ];
+
+          if (orResponse.includes('SUGGESTED_QUESTIONS:')) {
+            const parts = orResponse.split('SUGGESTED_QUESTIONS:');
+            reply = parts[0].trim();
+            const qStr = parts[1].trim().replace(/^\[|\]$/g, '');
+            suggestedQuestions = qStr.split('|').map((q) => q.trim()).filter(Boolean);
+          }
+
+          return res.json({
+            reply,
+            suggestedQuestions,
+            source: 'openrouter',
+            model: process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash',
+          });
+        }
+      } catch (orErr) {
+        console.warn('OpenRouter chat failed, falling back to Gemini/Local:', orErr);
+      }
+    }
+
+    // 2. Fallback to Gemini 3.7 Flash
+    const gemini = getGeminiClient();
+    if (gemini) {
+      try {
+        const conversationContext = Array.isArray(history)
+          ? history.slice(-6).map((h: { role: string; text: string }) => `${h.role === 'user' ? 'Visitor' : 'Assistant'}: ${h.text}`).join('\n')
+          : '';
 
         const prompt = `${conversationContext ? `Recent Conversation:\n${conversationContext}\n\n` : ''}Visitor Query: "${message}"\n\nProvide your response:`;
 
@@ -464,7 +650,7 @@ Your role:
       }
     }
 
-    // Smart Local Fallback when API key is missing or offline
+    // 3. Smart Local Fallback when neither API is available or offline
     const qLower = message.toLowerCase();
     let reply = `Vishwajit Laxman Pawar is an Electronics & Telecommunication Engineering graduate from Bharati Vidyapeeth's College of Engineering, Kolhapur (2022-2026). He specializes in **Embedded Systems, IoT, C/Embedded C, FreeRTOS, ESP32, and 6-DOF Robotics**.`;
 
@@ -511,10 +697,7 @@ app.post('/api/copilot/match-jd', async (req, res) => {
       return res.status(400).json({ error: 'Job description is required' });
     }
 
-    const gemini = getGeminiClient();
-    if (gemini) {
-      try {
-        const prompt = `
+    const sysPrompt = `
 Analyze how well candidate Vishwajit Laxman Pawar matches this job opportunity.
 ${VISHWAJIT_PORTFOLIO_GROUNDING}
 
@@ -542,9 +725,32 @@ Evaluate objectively and output strictly valid JSON matching this schema:
 }
 `;
 
+    // 1. OpenRouter API
+    if (process.env.OPENROUTER_API_KEY) {
+      try {
+        const raw = await callOpenRouter([
+          { role: 'system', content: sysPrompt },
+          { role: 'user', content: 'Analyze match and return strictly valid JSON scorecard.' }
+        ], { responseFormatJson: true, temperature: 0.2 });
+
+        if (raw) {
+          const parsed = safeJsonParse(raw);
+          if (parsed) {
+            return res.json({ ...parsed, source: 'openrouter' });
+          }
+        }
+      } catch (orErr) {
+        console.warn('OpenRouter JD match failed, trying Gemini:', orErr);
+      }
+    }
+
+    // 2. Gemini 3.7 Flash
+    const gemini = getGeminiClient();
+    if (gemini) {
+      try {
         const result = await gemini.models.generateContent({
           model: 'gemini-3.7-flash',
-          contents: prompt,
+          contents: sysPrompt,
           config: {
             responseMimeType: 'application/json',
             temperature: 0.2,
@@ -552,15 +758,17 @@ Evaluate objectively and output strictly valid JSON matching this schema:
         });
 
         if (result.text) {
-          const parsed = JSON.parse(result.text);
-          return res.json(parsed);
+          const parsed = safeJsonParse(result.text);
+          if (parsed) {
+            return res.json({ ...parsed, source: 'gemini-3.7-flash' });
+          }
         }
       } catch (err) {
         console.warn('Gemini JD match failed, falling back:', err);
       }
     }
 
-    // Local heuristic fallback for JD analysis
+    // 3. Local heuristic fallback for JD analysis
     const jdLower = jobDescription.toLowerCase();
     const skills = [
       { name: 'Embedded C / C', matched: jdLower.includes('c') || jdLower.includes('firmware') },
@@ -592,6 +800,7 @@ Evaluate objectively and output strictly valid JSON matching this schema:
         'Walk us through your approach to inverse kinematics and serial servo communication on your 6-axis robot arm.',
         'How did you calibrate and interface the DHT11 and BMP180 sensors over the I2C bus for the weather station?'
       ],
+      source: 'local-embedded-brain',
     });
   } catch (error) {
     console.error('Error in /api/copilot/match-jd:', error);
@@ -603,12 +812,8 @@ Evaluate objectively and output strictly valid JSON matching this schema:
 app.post('/api/copilot/mock-interview', async (req, res) => {
   try {
     const { topic, mode, question, candidateAnswer } = req.body;
-    const gemini = getGeminiClient();
 
-    if (gemini) {
-      try {
-        if (mode === 'evaluate') {
-          const prompt = `
+    const evalPrompt = `
 You are a Senior Principal Embedded Software Engineer conducting a technical interview for Vishwajit Laxman Pawar.
 ${VISHWAJIT_PORTFOLIO_GROUNDING}
 
@@ -627,21 +832,8 @@ Evaluate the candidate's answer with high technical rigor. Output strictly valid
   "followUpQuestion": "A deeper technical follow-up question to test advanced understanding"
 }
 `;
-          const result = await gemini.models.generateContent({
-            model: 'gemini-3.7-flash',
-            contents: prompt,
-            config: {
-              responseMimeType: 'application/json',
-              temperature: 0.3,
-            },
-          });
 
-          if (result.text) {
-            return res.json(JSON.parse(result.text));
-          }
-        } else {
-          // Generate new technical interview question
-          const prompt = `
+    const genPrompt = `
 You are a Senior Principal Embedded Systems / Robotics Interviewer.
 Generate a high-quality, practical technical interview question for Vishwajit Laxman Pawar on the topic: "${topic || 'ESP32 & FreeRTOS'}".
 ${VISHWAJIT_PORTFOLIO_GROUNDING}
@@ -656,9 +848,50 @@ Output strictly valid JSON:
   "keyConceptsTested": ["concept1", "concept2", "concept3"]
 }
 `;
+
+    // 1. OpenRouter API
+    if (process.env.OPENROUTER_API_KEY) {
+      try {
+        const raw = await callOpenRouter([
+          { role: 'system', content: mode === 'evaluate' ? evalPrompt : genPrompt },
+          { role: 'user', content: mode === 'evaluate' ? 'Evaluate candidate answer in valid JSON.' : 'Generate question in valid JSON.' }
+        ], { responseFormatJson: true, temperature: mode === 'evaluate' ? 0.3 : 0.4 });
+
+        if (raw) {
+          const parsed = safeJsonParse(raw);
+          if (parsed) {
+            return res.json({ ...parsed, source: 'openrouter' });
+          }
+        }
+      } catch (orErr) {
+        console.warn('OpenRouter mock interview failed, trying Gemini:', orErr);
+      }
+    }
+
+    // 2. Gemini 3.7 Flash
+    const gemini = getGeminiClient();
+    if (gemini) {
+      try {
+        if (mode === 'evaluate') {
           const result = await gemini.models.generateContent({
             model: 'gemini-3.7-flash',
-            contents: prompt,
+            contents: evalPrompt,
+            config: {
+              responseMimeType: 'application/json',
+              temperature: 0.3,
+            },
+          });
+
+          if (result.text) {
+            const parsed = safeJsonParse(result.text);
+            if (parsed) {
+              return res.json({ ...parsed, source: 'gemini-3.7-flash' });
+            }
+          }
+        } else {
+          const result = await gemini.models.generateContent({
+            model: 'gemini-3.7-flash',
+            contents: genPrompt,
             config: {
               responseMimeType: 'application/json',
               temperature: 0.4,
@@ -666,7 +899,10 @@ Output strictly valid JSON:
           });
 
           if (result.text) {
-            return res.json(JSON.parse(result.text));
+            const parsed = safeJsonParse(result.text);
+            if (parsed) {
+              return res.json({ ...parsed, source: 'gemini-3.7-flash' });
+            }
           }
         }
       } catch (err) {
@@ -674,14 +910,15 @@ Output strictly valid JSON:
       }
     }
 
-    // Local fallback for mock interview
+    // 3. Local fallback for mock interview
     if (mode === 'evaluate') {
       return res.json({
         rating: 9,
         verdict: 'Strong & Accurate',
         feedback: 'Great technical clarity! You correctly identified the critical role of mutexes, queues, and task priorities in preventing race conditions and priority inversion on the ESP32.',
         modelAnswer: 'In FreeRTOS on the ESP32, task synchronization across dual cores is managed via Binary/Counting Semaphores, FreeRTOS Queues, and Mutexes with Priority Inheritance. Time-critical sensor sampling should run pinned to Core 1 at higher priority, while networking tasks run on Core 0.',
-        followUpQuestion: 'How does FreeRTOS handle priority inversion, and how does the Mutex priority inheritance mechanism resolve it?'
+        followUpQuestion: 'How does FreeRTOS handle priority inversion, and how does the Mutex priority inheritance mechanism resolve it?',
+        source: 'local-embedded-brain',
       });
     }
 
@@ -691,7 +928,8 @@ Output strictly valid JSON:
       question: 'On an ESP32 running FreeRTOS with Wi-Fi telemetry and I2C sensor sampling, how would you design the architecture to prevent I2C bus lockups when the Wi-Fi stack blocks on packet transmission?',
       context: 'Tests understanding of dual-core task pinning (xTaskCreatePinnedToCore), queue buffering, and FreeRTOS non-blocking task notification patterns.',
       hint: 'Consider separating the sensor driver ISR/task onto Core 1 with an asynchronous FreeRTOS queue feeding the Wi-Fi telemetry dispatcher on Core 0.',
-      keyConceptsTested: ['FreeRTOS Queues', 'Dual-Core Task Pinning', 'I2C Bus Contention', 'Watchdog Timers']
+      keyConceptsTested: ['FreeRTOS Queues', 'Dual-Core Task Pinning', 'I2C Bus Contention', 'Watchdog Timers'],
+      source: 'local-embedded-brain',
     });
   } catch (error) {
     console.error('Error in /api/copilot/mock-interview:', error);
@@ -707,10 +945,7 @@ app.post('/api/copilot/generate-firmware', async (req, res) => {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    const gemini = getGeminiClient();
-    if (gemini) {
-      try {
-        const sysPrompt = `
+    const sysPrompt = `
 You are the AI Firmware Architect for Vishwajit's ESP32 Embedded Lab.
 Generate clean, production-grade, well-commented C++ (Arduino/ESP-IDF compatible) firmware based on the user's specification.
 
@@ -738,6 +973,29 @@ Output strictly valid JSON matching this schema:
 }
 `;
 
+    // 1. OpenRouter API
+    if (process.env.OPENROUTER_API_KEY) {
+      try {
+        const raw = await callOpenRouter([
+          { role: 'system', content: sysPrompt },
+          { role: 'user', content: `User Firmware Request: "${userPrompt}"` }
+        ], { responseFormatJson: true, temperature: 0.3 });
+
+        if (raw) {
+          const parsed = safeJsonParse(raw);
+          if (parsed) {
+            return res.json({ ...parsed, source: 'openrouter' });
+          }
+        }
+      } catch (orErr) {
+        console.warn('OpenRouter firmware generator failed, trying Gemini:', orErr);
+      }
+    }
+
+    // 2. Gemini 3.7 Flash
+    const gemini = getGeminiClient();
+    if (gemini) {
+      try {
         const result = await gemini.models.generateContent({
           model: 'gemini-3.7-flash',
           contents: `User Firmware Request: "${userPrompt}"`,
@@ -749,14 +1007,17 @@ Output strictly valid JSON matching this schema:
         });
 
         if (result.text) {
-          return res.json(JSON.parse(result.text));
+          const parsed = safeJsonParse(result.text);
+          if (parsed) {
+            return res.json({ ...parsed, source: 'gemini-3.7-flash' });
+          }
         }
       } catch (err) {
         console.warn('Gemini firmware generator failed, falling back:', err);
       }
     }
 
-    // Local robust firmware template fallback
+    // 3. Local robust firmware template fallback
     return res.json({
       title: 'ESP32 Dual-Core FreeRTOS Sensor Telemetry & Power Manager',
       description: 'Production-ready firmware orchestrating DHT11 and BMP180 sensor reads on Core 1 with non-blocking queue telemetry dispatch to Core 0.',
@@ -855,7 +1116,8 @@ void loop() {
         '[OK] DHT11 single-wire bus online on GPIO4',
         '[CORE 0 TELEMETRY] Time: 2004 ms | Temp: 25.2 C | Hum: 56.4 % | Press: 101340 Pa | Alt: 12.4 m',
         '[CORE 0 TELEMETRY] Time: 4008 ms | Temp: 25.3 C | Hum: 56.1 % | Press: 101338 Pa | Alt: 12.6 m'
-      ]
+      ],
+      source: 'local-embedded-brain',
     });
   } catch (error) {
     console.error('Error in /api/copilot/generate-firmware:', error);
@@ -867,11 +1129,8 @@ void loop() {
 app.post('/api/copilot/project-deepdive', async (req, res) => {
   try {
     const { projectId } = req.body;
-    const gemini = getGeminiClient();
 
-    if (gemini) {
-      try {
-        const prompt = `
+    const sysPrompt = `
 Provide an advanced engineering and mathematical deep dive into Vishwajit Laxman Pawar's project: "${projectId || '6-dof-robot'}".
 ${VISHWAJIT_PORTFOLIO_GROUNDING}
 
@@ -890,9 +1149,32 @@ Output strictly valid JSON matching this schema:
 }
 `;
 
+    // 1. OpenRouter API
+    if (process.env.OPENROUTER_API_KEY) {
+      try {
+        const raw = await callOpenRouter([
+          { role: 'system', content: sysPrompt },
+          { role: 'user', content: `Generate deep dive for project: ${projectId}` }
+        ], { responseFormatJson: true, temperature: 0.3 });
+
+        if (raw) {
+          const parsed = safeJsonParse(raw);
+          if (parsed) {
+            return res.json({ ...parsed, source: 'openrouter' });
+          }
+        }
+      } catch (orErr) {
+        console.warn('OpenRouter deep dive failed, trying Gemini:', orErr);
+      }
+    }
+
+    // 2. Gemini 3.7 Flash
+    const gemini = getGeminiClient();
+    if (gemini) {
+      try {
         const result = await gemini.models.generateContent({
           model: 'gemini-3.7-flash',
-          contents: prompt,
+          contents: sysPrompt,
           config: {
             responseMimeType: 'application/json',
             temperature: 0.3,
@@ -900,14 +1182,17 @@ Output strictly valid JSON matching this schema:
         });
 
         if (result.text) {
-          return res.json(JSON.parse(result.text));
+          const parsed = safeJsonParse(result.text);
+          if (parsed) {
+            return res.json({ ...parsed, source: 'gemini-3.7-flash' });
+          }
         }
       } catch (err) {
         console.warn('Gemini deep dive failed, fallback:', err);
       }
     }
 
-    // Local deep dive fallback
+    // 3. Local deep dive fallback
     if (projectId === 'weather' || projectId === 'weather-project') {
       return res.json({
         projectName: 'IoT Meteorological Weather Monitoring System',
@@ -931,7 +1216,8 @@ Output strictly valid JSON matching this schema:
             challenge: 'Wi-Fi socket retry blocking caused I2C timing violations and missed sensor cycles.',
             solution: 'Isolated I2C polling onto FreeRTOS Core 1 and pushed measurements into a synchronized queue processed by Core 0.'
           }
-        ]
+        ],
+        source: 'local-embedded-brain',
       });
     }
 
@@ -957,7 +1243,8 @@ Output strictly valid JSON matching this schema:
           challenge: 'Servo jitter and current spikes during simultaneous multi-joint high-speed acceleration.',
           solution: 'Implemented S-curve acceleration smoothing and isolated high-current servo power lines with bulk electrolytic capacitor banks.'
         }
-      ]
+      ],
+      source: 'local-embedded-brain',
     });
   } catch (error) {
     console.error('Error in /api/copilot/project-deepdive:', error);

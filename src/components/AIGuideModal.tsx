@@ -80,8 +80,7 @@ export const AIGuideModal: React.FC<AIGuideModalProps> = ({
                 <span>Next-Generation AI Grounding Architecture</span>
               </div>
               <p>
-                This portfolio integrates <strong>Google Gemini 3.7 Flash</strong> server-side through the official{' '}
-                <code className="text-cyan-300 font-mono">@google/genai</code> SDK. All responses are factually grounded
+                This portfolio integrates <strong>OpenRouter API</strong> and <strong>Google Gemini 3.7 Flash</strong> server-side. All responses are factually grounded
                 in Vishwajit Laxman Pawar's verified B.Tech coursework at{' '}
                 <strong>Bharati Vidyapeeth's College of Engineering Kolhapur</strong>, his 6-DOF Robotic Arm, and his ESP32 FreeRTOS IoT architectures.
               </p>
