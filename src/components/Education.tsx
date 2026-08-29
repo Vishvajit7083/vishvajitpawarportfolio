@@ -9,39 +9,30 @@ import {
   CheckCircle2,
   Cpu,
   FileText,
-  Upload,
   ExternalLink,
   Download,
-  Trash2,
-  Edit3,
+  Printer,
   ShieldCheck,
-  FileCheck,
-  AlertCircle,
   Sparkles,
+  Maximize2,
 } from 'lucide-react';
 import { PERSONAL_INFO } from '../data/portfolioData';
 import { sound } from '../utils/audioEffects';
 import { certificateManager, StoredCertificate } from '../utils/certificateStore';
 import { dataUrlToBlobUrl } from '../utils/pdfHelper';
 import { PDFViewerCanvas } from './PDFViewerCanvas';
+import { CertificateModal } from './CertificateModal';
 
 export const Education: React.FC = () => {
   const canvasRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Education Certificate state synced with certificate store
   const [eduCert, setEduCert] = useState<StoredCertificate | null>(null);
-  const [isEditingId, setIsEditingId] = useState(false);
-  const [certIdInput, setCertIdInput] = useState('SPPU-BTECH-ENTC-2026-878');
-  const [statusMsg, setStatusMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = certificateManager.subscribe((certs) => {
       const found = certs.find((c) => c.id === 'edu-cert');
       if (found) {
         setEduCert(found);
-        setCertIdInput(found.certificateId || 'SPPU-BTECH-ENTC-2026-878');
       }
     });
     return () => unsubscribe();
@@ -176,98 +167,31 @@ export const Education: React.FC = () => {
     };
   }, []);
 
-  // Handle PDF/Image File Upload
-  const processCertificateFile = (file: File) => {
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    const isImage = file.type.startsWith('image/');
-
-    if (!isPdf && !isImage) {
-      setStatusMsg({
-        text: 'Unsupported file format. Please upload a PDF document (.pdf) or image (.png, .jpg, .webp).',
-        type: 'error',
-      });
-      return;
-    }
-
-    if (file.size > 20 * 1024 * 1024) {
-      setStatusMsg({
-        text: 'File size exceeds 20MB limit. Please upload an optimized file.',
-        type: 'error',
-      });
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      sound.playSuccessChime();
-      certificateManager.uploadCertificateFile(
-        'edu-cert',
-        dataUrl,
-        isPdf ? 'pdf' : 'image',
-        file.name,
-        certIdInput
-      );
-      setStatusMsg({
-        text: `Certificate document "${file.name}" uploaded and saved successfully!`,
-        type: 'success',
-      });
-    };
-    reader.onerror = () => {
-      setStatusMsg({
-        text: 'Failed to read file. Please try again.',
-        type: 'error',
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      processCertificateFile(file);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      processCertificateFile(file);
-    }
-  };
-
-  const handleSaveCertId = (e: React.FormEvent) => {
-    e.preventDefault();
-    sound.playSuccessChime();
-    certificateManager.updateCertificate('edu-cert', {
-      certificateId: certIdInput.trim() || 'SPPU-BTECH-ENTC-2026-878',
-    });
-    setIsEditingId(false);
-    setStatusMsg({
-      text: 'Certificate ID updated successfully!',
-      type: 'success',
-    });
-  };
-
-  const handleRemoveDocument = () => {
-    sound.playClick();
-    if (confirm('Are you sure you want to remove the uploaded degree certificate document?')) {
-      certificateManager.removeCustomDocument('edu-cert');
-      setStatusMsg({
-        text: 'Document removed. Restored standard verified digital certificate.',
-        type: 'success',
-      });
-    }
-  };
-
+  const currentCertId = eduCert?.certificateId || 'BVC-BTECH-ENTC-2026-878';
   const hasUploadedDoc = !!eduCert?.customDocumentUrl;
-  const currentCertId = eduCert?.certificateId || 'SPPU-BTECH-ENTC-2026-878';
   const safePdfUrl = useMemo(() => {
     if (!eduCert?.customDocumentUrl) return null;
     return dataUrlToBlobUrl(eduCert.customDocumentUrl);
   }, [eduCert?.customDocumentUrl]);
+
+  const handlePrint = () => {
+    sound.playClick();
+    window.print();
+  };
+
+  const handleDownload = () => {
+    sound.playClick();
+    if (eduCert?.customDocumentUrl) {
+      const a = document.createElement('a');
+      a.href = eduCert.customDocumentUrl;
+      a.download = eduCert.customDocumentName || 'Vishwajit-Pawar-Degree-Certificate.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      window.print();
+    }
+  };
 
   return (
     <section id="education" className="relative w-full py-16 sm:py-20 px-4 sm:px-8 max-w-7xl mx-auto z-20">
@@ -369,7 +293,7 @@ export const Education: React.FC = () => {
       </div>
 
       {/* ========================================================================= */}
-      {/* Education Certificate Card: Header → Responsive PDF Viewer → Upload Controls */}
+      {/* Permanent Accredited Degree Certificate Card */}
       {/* ========================================================================= */}
       <div
         id="education-certificate-card"
@@ -380,7 +304,7 @@ export const Education: React.FC = () => {
         <div className="cyber-corner-bl" />
         <div className="cyber-corner-br" />
 
-        {/* 1. Certificate Header */}
+        {/* Certificate Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-cyan-900/60">
           <div className="flex items-center gap-3 min-w-0">
             <div className="p-2.5 rounded-xl bg-cyan-950/80 border border-cyan-500/40 text-cyan-400 shrink-0">
@@ -391,58 +315,47 @@ export const Education: React.FC = () => {
                 <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest font-bold">
                   OFFICIAL DEGREE CERTIFICATE & TRANSCRIPT
                 </span>
-                {hasUploadedDoc ? (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/60 font-semibold flex items-center gap-1">
-                    <FileCheck className="w-3 h-3" /> REAL PDF ATTACHED
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
-                    DIGITALLY VALIDATED
-                  </span>
-                )}
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/60 font-semibold flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" /> PERMANENT RECORD
+                </span>
               </div>
               <h3 className="text-base sm:text-lg font-bold font-display text-white truncate mt-0.5">
                 B.Tech in Electronics & Telecommunication Engineering
               </h3>
               <p className="text-xs font-mono text-slate-400">
-                Bharti vidyapeeth college of engineering Kolhapur (2022 - 2026) • Recipient:{' '}
+                Bharati Vidyapeeth College of Engineering Kolhapur (2022 - 2026) • Recipient:{' '}
                 <strong className="text-white">Vishwajit Laxman Pawar</strong>
               </p>
             </div>
           </div>
 
-          {/* Credential ID Badge */}
+          {/* Action Buttons Toolbar */}
           <div className="flex items-center gap-2 shrink-0 font-mono text-xs">
-            <span className="text-slate-400">ID:</span>
-            <span className="px-2.5 py-1 rounded bg-slate-900 border border-cyan-800 text-cyan-300 font-bold">
-              {currentCertId}
-            </span>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 cursor-pointer shadow-[0_0_12px_rgba(0,240,255,0.2)]"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>Full Document View</span>
+            </button>
+            <button
+              onClick={handlePrint}
+              title="Print Degree Document"
+              className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white cursor-pointer"
+            >
+              <Printer className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleDownload}
+              title="Download Degree Document"
+              className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
-        {/* Status Notification Banner */}
-        {statusMsg && (
-          <div
-            className={`p-3 rounded-xl border text-xs font-mono flex items-center justify-between gap-2 ${
-              statusMsg.type === 'success'
-                ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
-                : 'bg-rose-950/80 border-rose-500 text-rose-300'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{statusMsg.text}</span>
-            </div>
-            <button
-              onClick={() => setStatusMsg(null)}
-              className="text-xs opacity-70 hover:opacity-100 cursor-pointer"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
-        {/* 2. Responsive PDF / Document Viewer Container */}
+        {/* Responsive Document Viewer */}
         <div
           id="education-pdf-viewer-container"
           className="relative w-full rounded-xl overflow-hidden border border-cyan-500/30 bg-slate-950/90 shadow-inner flex flex-col min-h-[400px]"
@@ -451,21 +364,15 @@ export const Education: React.FC = () => {
           }}
         >
           {hasUploadedDoc && eduCert?.customDocumentType === 'pdf' && eduCert?.customDocumentUrl ? (
-            /* Attached Real Vector Canvas PDF Viewer with Zoom & Navigation (Never blocked by Chrome) */
             <div className="w-full h-full min-h-[400px] overflow-hidden flex flex-col">
               <PDFViewerCanvas
                 pdfDataUrl={eduCert.customDocumentUrl}
                 fileName={eduCert.customDocumentName || 'Degree-Certificate.pdf'}
                 certificateId={currentCertId}
                 className="w-full h-full min-h-[400px] overflow-hidden"
-                onReplaceClick={() => {
-                  sound.playClick();
-                  fileInputRef.current?.click();
-                }}
               />
             </div>
           ) : hasUploadedDoc && eduCert?.customDocumentType === 'image' && safePdfUrl ? (
-            /* Attached Image Certificate Preview */
             <div className="w-full h-full min-h-[400px] overflow-hidden flex flex-col bg-slate-900">
               <div className="flex items-center justify-between px-3 sm:px-4 py-2 bg-slate-900 border-b border-slate-800 text-xs font-mono shrink-0">
                 <span className="text-cyan-300 flex items-center gap-2 font-bold truncate">
@@ -490,7 +397,6 @@ export const Education: React.FC = () => {
               </div>
             </div>
           ) : (
-            /* Default High-Fidelity Accredited Digital Degree Document */
             <div
               className="w-full h-full min-h-[400px] p-4 sm:p-8 flex flex-col items-center justify-between text-center relative overflow-hidden"
               style={{
@@ -561,148 +467,13 @@ export const Education: React.FC = () => {
             </div>
           )}
         </div>
-
-        {/* ========================================================================= */}
-        {/* 3. Upload & Edit Controls: ALWAYS RENDERED BELOW PDF IN NORMAL FLOW */}
-        {/* ========================================================================= */}
-        <div
-          id="education-upload-controls"
-          className="p-4 sm:p-5 rounded-xl bg-slate-900/90 border border-cyan-500/30 font-mono text-xs space-y-4 shadow-lg"
-        >
-          {/* Top Info Banner & Replace Trigger */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-slate-300">
-              <Upload className="w-4 h-4 text-cyan-400 shrink-0" />
-              <span>
-                {hasUploadedDoc ? (
-                  <>
-                    Real PDF attached: <strong className="text-white">{eduCert?.customDocumentName}</strong>. You can replace the document or edit Certificate ID below.
-                  </>
-                ) : (
-                  <>
-                    Want to attach your real PDF certificate file or edit this certificate ID?
-                  </>
-                )}
-              </span>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf,image/png,image/jpeg,image/webp"
-                className="hidden"
-                onChange={handleFileInputChange}
-              />
-
-              {/* Main Upload / Replace Button */}
-              <button
-                id="education-upload-pdf-btn"
-                type="button"
-                onClick={() => {
-                  sound.playClick();
-                  fileInputRef.current?.click();
-                }}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
-                  hasUploadedDoc
-                    ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-500 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
-                    : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 border-cyan-400 shadow-[0_0_15px_rgba(0,240,255,0.3)]'
-                }`}
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>{hasUploadedDoc ? 'REPLACE PDF / EDIT ID' : 'UPLOAD REAL DEGREE PDF'}</span>
-              </button>
-
-              {/* Edit ID Inline Toggle */}
-              <button
-                type="button"
-                onClick={() => {
-                  sound.playClick();
-                  setIsEditingId(!isEditingId);
-                }}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-cyan-500 text-slate-300 hover:text-cyan-300 text-xs cursor-pointer"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>{isEditingId ? 'Close ID Editor' : 'Edit ID'}</span>
-              </button>
-
-              {/* Remove Uploaded PDF if active */}
-              {hasUploadedDoc && (
-                <button
-                  type="button"
-                  onClick={handleRemoveDocument}
-                  title="Remove uploaded PDF and revert to standard template"
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Reset</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Expandable Certificate ID & Metadata Editor Form */}
-          {isEditingId && (
-            <form
-              onSubmit={handleSaveCertId}
-              className="p-3 sm:p-4 rounded-lg bg-slate-950 border border-cyan-500/40 space-y-3 animate-in fade-in duration-200"
-            >
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <div className="flex-1 w-full">
-                  <label className="block text-[11px] font-semibold text-cyan-300 mb-1">
-                    OFFICIAL DEGREE CERTIFICATE / CREDENTIAL ID:
-                  </label>
-                  <input
-                    type="text"
-                    value={certIdInput}
-                    onChange={(e) => setCertIdInput(e.target.value)}
-                    placeholder="e.g. SPPU-BTECH-ENTC-2026-878"
-                    className="w-full px-3 py-1.5 rounded bg-slate-900 border border-slate-700 focus:border-cyan-400 focus:outline-none text-white text-xs font-mono"
-                    required
-                  />
-                </div>
-                <div className="flex items-center gap-2 self-end sm:self-auto pt-2 sm:pt-4">
-                  <button
-                    type="submit"
-                    className="px-3.5 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs cursor-pointer shadow-[0_0_10px_rgba(0,240,255,0.3)]"
-                  >
-                    Save ID
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingId(false)}
-                    className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </form>
-          )}
-
-          {/* Drag & Drop Quick Drop Zone */}
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border border-dashed rounded-lg p-2.5 text-center cursor-pointer transition-all ${
-              isDragging
-                ? 'border-cyan-400 bg-cyan-950/40 text-cyan-300'
-                : 'border-slate-800 hover:border-cyan-500/50 bg-slate-950/40 hover:bg-slate-950 text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <span className="text-[11px]">
-              Drag & drop a new PDF / image certificate here, or click to browse (up to 20MB).
-            </span>
-          </div>
-        </div>
       </div>
+
+      <CertificateModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        initialCertId="edu-cert"
+      />
     </section>
   );
 };
-

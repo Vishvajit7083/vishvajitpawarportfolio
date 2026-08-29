@@ -25,6 +25,13 @@ import {
 import { soundFx } from '../utils/audio';
 import { useTheme } from '../context/ThemeContext';
 import ReactMarkdown from 'react-markdown';
+import {
+  generateLocalChatReply,
+  generateLocalJDMatch,
+  generateLocalMockQuestion,
+  evaluateLocalMockAnswer,
+  getLocalProjectDeepDive,
+} from '../utils/copilotEngine';
 
 interface AIEngineeringCopilotProps {
   isOpen: boolean;
@@ -238,13 +245,15 @@ How can I assist your evaluation today?`,
 
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err) {
-      console.error(err);
+      console.warn('API chat fallback triggered:', err);
+      const fallback = generateLocalChatReply(text);
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now().toString(),
+          id: (Date.now() + 1).toString(),
           role: 'assistant',
-          text: `Vishwajit specializes in **Embedded Systems, C/Embedded C, ESP32 FreeRTOS multitasking, and 6-DOF Robotics**. Please try asking another question!`,
+          text: fallback.reply,
+          suggestedQuestions: fallback.suggestedQuestions,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -274,7 +283,9 @@ How can I assist your evaluation today?`,
       const data = await response.json();
       setMatchResult(data);
     } catch (err) {
-      console.error(err);
+      console.warn('API JD Match fallback triggered:', err);
+      const fallbackResult = generateLocalJDMatch(jdText, roleTitle);
+      setMatchResult(fallbackResult);
     } finally {
       setIsMatchLoading(false);
     }
@@ -301,7 +312,9 @@ How can I assist your evaluation today?`,
       const data = await response.json();
       setActiveQuestion(data);
     } catch (err) {
-      console.error(err);
+      console.warn('API Mock Question fallback triggered:', err);
+      const fallbackQ = generateLocalMockQuestion(topic);
+      setActiveQuestion(fallbackQ);
     } finally {
       setIsQuestionLoading(false);
     }
@@ -328,7 +341,9 @@ How can I assist your evaluation today?`,
       const data = await response.json();
       setEvaluation(data);
     } catch (err) {
-      console.error(err);
+      console.warn('API Mock Evaluation fallback triggered:', err);
+      const fallbackEval = evaluateLocalMockAnswer(activeQuestion.question, candidateAnswer);
+      setEvaluation(fallbackEval);
     } finally {
       setIsEvaluating(false);
     }
@@ -351,7 +366,9 @@ How can I assist your evaluation today?`,
       const data = await response.json();
       setDeepDiveData(data);
     } catch (err) {
-      console.error(err);
+      console.warn('API Deep Dive fallback triggered:', err);
+      const fallbackDeepDive = getLocalProjectDeepDive(projectId);
+      setDeepDiveData(fallbackDeepDive);
     } finally {
       setIsDeepDiveLoading(false);
     }

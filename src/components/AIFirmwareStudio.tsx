@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { soundFx } from '../utils/audio';
 import { useTheme } from '../context/ThemeContext';
+import { generateLocalFirmware } from '../utils/copilotEngine';
 
 interface FirmwareResult {
   title: string;
@@ -87,7 +88,10 @@ export const AIFirmwareStudio: React.FC = () => {
       setFirmware(data);
       setSerialLogs(data.simulatedSerialOutput || []);
     } catch (err) {
-      console.error('Error generating firmware:', err);
+      console.warn('Firmware API fallback triggered:', err);
+      const fallback = generateLocalFirmware(prompt);
+      setFirmware(fallback);
+      setSerialLogs(fallback.simulatedSerialOutput || []);
     } finally {
       setIsLoading(false);
     }

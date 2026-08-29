@@ -3,13 +3,10 @@ import {
   Award,
   ShieldCheck,
   CheckCircle2,
-  ExternalLink,
   Cpu,
   LineChart,
-  FileText,
-  Upload,
   Eye,
-  FileCheck,
+  GraduationCap,
   Sparkles,
 } from 'lucide-react';
 import { sound } from '../utils/audioEffects';
@@ -48,29 +45,28 @@ export const Certifications: React.FC = () => {
           </div>
           <div>
             <div className="text-xs font-mono text-cyan-400 tracking-widest uppercase">
-              // ACCREDITED_CREDENTIALS
+              // ACCREDITED_ACHIEVEMENTS
             </div>
             <h2 className="text-3xl sm:text-4xl font-bold font-display text-white tracking-wide">
-              CERTIFICATIONS & INTERNSHIPS
+              CERTIFICATIONS & ACHIEVEMENTS
             </h2>
           </div>
         </div>
 
-        {/* Quick Modal Trigger & Upload Helper */}
+        {/* Modal Trigger */}
         <button
           id="open-cert-modal-header-btn"
           onClick={() => handleOpenCertificate(certificates[0]?.id || 'cert-1')}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-500/50 hover:border-cyan-400 text-cyan-300 font-mono text-xs font-semibold transition-all cursor-pointer shadow-[0_0_20px_rgba(0,240,255,0.2)] hover:shadow-[0_0_25px_rgba(0,240,255,0.4)] self-start sm:self-auto"
         >
-          <Upload className="w-4 h-4 text-cyan-400" />
-          <span>VIEW / UPLOAD CERTIFICATE PDF & ID</span>
+          <Eye className="w-4 h-4 text-cyan-400" />
+          <span>VIEW OFFICIAL CREDENTIALS & ACHIEVEMENTS</span>
         </button>
       </div>
 
       {/* Floating Certification Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {certificates.filter((c) => c.id !== 'edu-cert').map((cert, index) => {
-          const hasCustomDoc = !!cert.customDocumentUrl;
+        {certificates.filter((c) => c.id !== 'edu-cert').map((cert) => {
           return (
             <div
               key={cert.id}
@@ -97,15 +93,9 @@ export const Certifications: React.FC = () => {
                     )}
                   </div>
                   <div className="flex items-center gap-1.5">
-                    {hasCustomDoc ? (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/60 text-emerald-300 flex items-center gap-1 font-semibold">
-                        <FileCheck className="w-3 h-3" /> REAL PDF
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-cyan-300">
-                        DIGITAL CERT
-                      </span>
-                    )}
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 font-semibold flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-emerald-400" /> PERMANENT RECORD
+                    </span>
                     <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">
                       {cert.date}
                     </span>
@@ -152,7 +142,7 @@ export const Certifications: React.FC = () => {
                 {/* Click to open button */}
                 <div className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-cyan-950/40 group-hover:bg-cyan-500 group-hover:text-slate-950 border border-cyan-500/30 group-hover:border-cyan-400 text-cyan-300 font-mono text-xs font-bold transition-all duration-200">
                   <Eye className="w-3.5 h-3.5" />
-                  <span>OPEN OFFICIAL CERTIFICATE & PDF</span>
+                  <span>VIEW CREDENTIAL DOCUMENT</span>
                 </div>
               </div>
             </div>
@@ -160,7 +150,7 @@ export const Certifications: React.FC = () => {
         })}
       </div>
 
-      {/* Global Interactive Certificate & Real PDF Modal */}
+      {/* Interactive Certificate Modal */}
       <CertificateModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -169,4 +159,3 @@ export const Certifications: React.FC = () => {
     </section>
   );
 };
-
