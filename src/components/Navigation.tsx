@@ -106,7 +106,7 @@ export const Navigation: React.FC<NavigationProps> = ({
         </a>
 
         {/* Desktop Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-1 glass-panel p-1.5 rounded-full border border-[var(--border-subtle)]">
+        <nav className="hidden lg:flex items-center gap-1 glass-panel p-1.5 rounded-full border border-[var(--border-subtle)]" aria-label="Main Navigation">
           {navItems.map((item) => {
             const isActive = activeSection === item.id;
             return (
@@ -115,7 +115,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 href={item.href}
                 id={`nav-link-${item.id}`}
                 onClick={(e) => handleNavClick(item.id, e)}
-                className={`relative px-3.5 py-1.5 rounded-full text-xs font-mono tracking-wider transition-all duration-200 ${
+                className={`relative px-3.5 py-1.5 rounded-full text-xs font-mono tracking-wider transition-all duration-200 focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none ${
                   isActive
                     ? 'text-cyan-400 bg-[var(--chip-bg)] border border-[var(--border-primary)] shadow-sm font-semibold'
                     : 'text-[var(--text-secondary)] hover:text-cyan-400 hover:bg-black/5 dark:hover:bg-slate-900/60 border border-transparent'
@@ -143,8 +143,9 @@ export const Navigation: React.FC<NavigationProps> = ({
               onToggleSound();
             }}
             id="audio-toggle-btn"
+            aria-label={soundEnabled ? 'Mute sound effects' : 'Enable sound effects'}
             title={soundEnabled ? 'Mute Sci-Fi Audio FX' : 'Enable Sci-Fi Audio FX'}
-            className={`p-2 rounded-lg border text-xs font-mono transition-all cursor-pointer ${
+            className={`p-2 rounded-lg border text-xs font-mono transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none ${
               soundEnabled
                 ? 'bg-cyan-950/70 border-cyan-400 text-cyan-300 shadow-[0_0_10px_rgba(0,240,255,0.4)]'
                 : 'glass-panel text-[var(--text-muted)] hover:border-[var(--border-highlight)]'
@@ -161,8 +162,9 @@ export const Navigation: React.FC<NavigationProps> = ({
                 onOpenRecruiterBrief();
               }}
               id="nav-recruiter-brief-btn"
+              aria-label="60-Second Recruiter Briefing"
               title="60-Second Recruiter Briefing & Executive Summary"
-              className="hidden xl:flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/60 text-emerald-300 text-xs font-mono font-bold transition-all shadow-[0_0_12px_rgba(16,185,129,0.25)] cursor-pointer"
+              className="hidden xl:flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/60 text-emerald-300 text-xs font-mono font-bold transition-all shadow-[0_0_12px_rgba(16,185,129,0.25)] cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none"
             >
               <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
               <span>RECRUITER 60s</span>
@@ -177,8 +179,9 @@ export const Navigation: React.FC<NavigationProps> = ({
                 onOpenCopilot('chat');
               }}
               id="nav-ai-copilot-btn"
+              aria-label="Launch AI Engineering Copilot"
               title="Launch AI Engineering Copilot"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400 text-cyan-300 text-xs font-mono font-semibold transition-all shadow-[0_0_12px_rgba(0,240,255,0.3)] cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400 text-cyan-300 text-xs font-mono font-semibold transition-all shadow-[0_0_12px_rgba(0,240,255,0.3)] cursor-pointer focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none"
             >
               <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
               <span className="hidden sm:inline">AI COPILOT</span>
@@ -192,7 +195,8 @@ export const Navigation: React.FC<NavigationProps> = ({
               onOpenResume();
             }}
             id="nav-resume-btn"
-            className="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-lg bg-gradient-to-r from-cyan-500/20 to-sky-500/20 hover:from-cyan-500/30 hover:to-sky-500/30 text-cyan-400 text-xs font-mono font-medium border border-cyan-400/40 hover:border-cyan-400 transition-all shadow-sm cursor-pointer"
+            aria-label="Open Interactive Resume"
+            className="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-lg bg-gradient-to-r from-cyan-500/20 to-sky-500/20 hover:from-cyan-500/30 hover:to-sky-500/30 text-cyan-400 text-xs font-mono font-medium border border-cyan-400/40 hover:border-cyan-400 transition-all shadow-sm cursor-pointer focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none"
           >
             <FileText className="w-3.5 h-3.5 text-cyan-400" />
             <span>RESUME</span>
@@ -205,8 +209,9 @@ export const Navigation: React.FC<NavigationProps> = ({
               setMobileMenuOpen(!mobileMenuOpen);
             }}
             id="mobile-menu-toggle"
-            className="lg:hidden p-2 rounded-lg glass-panel border border-[var(--border-subtle)] text-cyan-400 cursor-pointer"
-            aria-label="Toggle menu"
+            className="lg:hidden p-2 rounded-lg glass-panel border border-[var(--border-subtle)] text-cyan-400 cursor-pointer focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none"
+            aria-label="Toggle navigation menu"
+            aria-expanded={mobileMenuOpen}
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
