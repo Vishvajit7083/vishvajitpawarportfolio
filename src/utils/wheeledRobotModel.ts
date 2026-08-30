@@ -257,6 +257,9 @@ export interface WheeledRobotInstance {
   materials: Record<string, THREE.Material>;
   updateFaceCanvas: (expression: 'listening' | 'scanning' | 'excited' | 'alert' | 'idle', obstacleCm?: number) => void;
   setDriveCommand: (cmd: 'forward' | 'backward' | 'left' | 'right' | 'spin' | 'stop', speedPercent?: number) => void;
+  setWheelAngles: (leftAngle: number, rightAngle: number) => void;
+  setPanServoAngle: (angle: number) => void;
+  updateSonarRay: (distanceCm: number, state: 'CLEAR' | 'WARNING' | 'CRITICAL_STOP', isScanning?: boolean) => void;
   setFinish: (finish: WheeledRobotFinish) => void;
   animate: (elapsedTime: number, delta: number, options?: { isScanning?: boolean; obstacleCm?: number }) => void;
 }
@@ -1051,6 +1054,44 @@ export function createWheeledRobot(scale: number = 1.0, initialFinish: WheeledRo
     }
   };
 
+  const setWheelAngles = (leftAngle: number, rightAngle: number) => {
+    leftWheelAngle = leftAngle;
+    rightWheelAngle = rightAngle;
+    wheelFrontLeft.rotation.x = leftAngle;
+    wheelRearLeft.rotation.x = leftAngle;
+    wheelFrontRight.rotation.x = rightAngle;
+    wheelRearRight.rotation.x = rightAngle;
+  };
+
+  const setPanServoAngle = (angle: number) => {
+    panServoAngle = angle;
+    sensorPanGroup.rotation.y = angle;
+  };
+
+  const updateSonarRay = (distanceCm: number, state: 'CLEAR' | 'WARNING' | 'CRITICAL_STOP', isScanning: boolean = false) => {
+    currentObstacleDistance = distanceCm;
+    
+    // Scale cone depth according to distance (scaled to world units)
+    const coneLength = Math.max(0.4, Math.min(4.5, (distanceCm / 50.0) * 0.8));
+    const coneRadius = Math.max(0.2, coneLength * 0.35);
+
+    if (sonarWaveMesh) {
+      sonarWaveMesh.scale.set(coneRadius / 0.8, coneRadius / 0.8, coneLength / 1.8);
+      sonarWaveMesh.position.set(0, 0.1, coneLength / 2 + 0.1);
+
+      if (state === 'CRITICAL_STOP') {
+        (sonarWaveMat as THREE.MeshBasicMaterial).color.setHex(0xf43f5e); // Red
+        (sonarWaveMat as THREE.MeshBasicMaterial).opacity = 0.75;
+      } else if (state === 'WARNING') {
+        (sonarWaveMat as THREE.MeshBasicMaterial).color.setHex(0xf59e0b); // Amber
+        (sonarWaveMat as THREE.MeshBasicMaterial).opacity = 0.55;
+      } else {
+        (sonarWaveMat as THREE.MeshBasicMaterial).color.setHex(0x00f0ff); // Cyan
+        (sonarWaveMat as THREE.MeshBasicMaterial).opacity = 0.38;
+      }
+    }
+  };
+
   // -------------------------------------------------------------
   // 13. FINISH STYLES (Cyber Lab Yellow, Titanium, Lab White, Carbon)
   // -------------------------------------------------------------
@@ -1191,6 +1232,9 @@ export function createWheeledRobot(scale: number = 1.0, initialFinish: WheeledRo
     },
     updateFaceCanvas,
     setDriveCommand,
+    setWheelAngles,
+    setPanServoAngle,
+    updateSonarRay,
     setFinish,
     animate,
   };

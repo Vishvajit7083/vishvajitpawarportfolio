@@ -35,7 +35,12 @@ import {
   HelpCircle,
   Camera,
   Info,
-  Flame
+  Flame,
+  AlertTriangle,
+  Navigation,
+  ShieldAlert,
+  Disc,
+  Radar
 } from 'lucide-react';
 import { sound } from '../utils/audioEffects';
 import { voiceAssistant, VoiceCommandEventDetail } from '../utils/voiceAssistant';
@@ -46,6 +51,14 @@ import {
   WHEELED_ROBOT_COMPONENTS,
   InteractiveComponentInfo
 } from '../utils/wheeledRobotModel';
+import { createRoboticsArena, ArenaEnvironment } from '../utils/robotArena';
+import {
+  DifferentialDriveSimulation,
+  TelemetryData,
+  DriveControlCommand,
+  ObstacleState,
+  AutoNavState
+} from '../utils/differentialDrivePhysics';
 import { createLaboratoryEnvironment } from '../utils/labEnvironment';
 import { useTheme } from '../context/ThemeContext';
 import { ScrollReveal } from './ScrollReveal';
@@ -120,6 +133,8 @@ const TECH_CARDS = [
   },
 ];
 
+export type CameraMode = 'follow' | 'orbit' | 'tactical' | 'sonar_pov';
+
 export const RobotProject: React.FC = () => {
   const { themeConfig } = useTheme();
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -127,85 +142,126 @@ export const RobotProject: React.FC = () => {
   // Active Selected Component for Deep-Dive Inspection
   const [activeComponentId, setActiveComponentId] = useState<string>('ultrasonic_sensor');
   const [selectedFinish, setSelectedFinish] = useState<WheeledRobotFinish>('authentic_lab');
-  const [activeDriveCommand, setActiveDriveCommand] = useState<'forward' | 'backward' | 'left' | 'right' | 'spin' | 'stop'>('stop');
-  const [throttleSpeed, setThrottleSpeed] = useState<number>(75); // 0 to 100%
-  const [obstacleDistance, setObstacleDistance] = useState<number>(48); // 5 to 200 cm
-  const [isScanning, setIsScanning] = useState<boolean>(true);
+  const [cameraMode, setCameraMode] = useState<CameraMode>('follow');
+  const [activeDriveCommand, setActiveDriveCommand] = useState<DriveControlCommand>('stop');
+  const [throttleSpeed, setThrottleSpeed] = useState<number>(75); // 10 to 100%
+  const [isAutonomous, setIsAutonomous] = useState<boolean>(false);
+  const [isScanningActive, setIsScanningActive] = useState<boolean>(true);
   const [selectedExpression, setSelectedExpression] = useState<'listening' | 'scanning' | 'excited' | 'alert' | 'idle'>('listening');
-  const [isAutoRotating, setIsAutoRotating] = useState<boolean>(false);
   const [isExplodedView, setIsExplodedView] = useState<boolean>(false);
   const [hoveredPartName, setHoveredPartName] = useState<string | null>(null);
   const [isSimulatingDiagnostic, setIsSimulatingDiagnostic] = useState<boolean>(false);
   const [diagnosticLog, setDiagnosticLog] = useState<string>(
-    'Wheeled Robot Telemetry online. Click 3D parts or drive controls to interact.'
+    '2-Wheel Differential Drive Online. Sonar Raycasting Active. Use WASD / Arrows or Autonomous Mode.'
   );
+
+  // Live Dynamic Telemetry State (Updated continuously from physics engine)
+  const [telemetry, setTelemetry] = useState<TelemetryData>({
+    leftWheelRpm: 0,
+    rightWheelRpm: 0,
+    leftWheelSpeedMs: 0,
+    rightWheelSpeedMs: 0,
+    linearSpeedMs: 0,
+    linearSpeedCms: 0,
+    angularVelocityRad: 0,
+    headingDeg: 0,
+    headingCompass: 'N',
+    ultrasonicDistanceCm: 250,
+    obstacleState: 'CLEAR',
+    detectedObstacleName: null,
+    batteryPercent: 98.4,
+    batteryVoltage: 7.85,
+    motorCurrentAmps: 0.25,
+    panAngleDeg: 0,
+    drivingMode: 'MANUAL TELEOPERATION',
+    autoState: 'MANUAL',
+    sonarStatus: 'CLEAR PATH',
+  });
 
   // Voice Interaction
   const [isVoiceListening, setIsVoiceListening] = useState<boolean>(false);
   const [voiceTranscript, setVoiceTranscript] = useState<string>('');
 
   // 3D Engine & Animation Refs
-  const isAutoRotatingRef = useRef(false);
-  const isExplodedViewRef = useRef(false);
-  const explodeProgressRef = useRef(0);
+  const physicsSimRef = useRef<DifferentialDriveSimulation>(new DifferentialDriveSimulation());
   const robotGroupRef = useRef<THREE.Group | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const robotInstanceRef = useRef<WheeledRobotInstance | null>(null);
-  const targetCameraPosRef = useRef<{ x: number; y: number; z: number; lookAtY: number }>({
-    x: 0,
-    y: 0.5,
-    z: 3.2,
-    lookAtY: 0.2,
-  });
+  const arenaRef = useRef<ArenaEnvironment | null>(null);
+  const isExplodedViewRef = useRef(false);
+  const explodeProgressRef = useRef(0);
+  const cameraModeRef = useRef<CameraMode>('follow');
+  const orbitAnglesRef = useRef({ theta: 0, phi: 0.35, distance: 3.8 });
 
   const activeComponent =
     WHEELED_ROBOT_COMPONENTS.find((c) => c.id === activeComponentId) || WHEELED_ROBOT_COMPONENTS[0];
-
-  // Sync state refs
-  useEffect(() => {
-    isAutoRotatingRef.current = isAutoRotating;
-  }, [isAutoRotating]);
 
   useEffect(() => {
     isExplodedViewRef.current = isExplodedView;
   }, [isExplodedView]);
 
-  // Handle Drive Commands
+  useEffect(() => {
+    cameraModeRef.current = cameraMode;
+  }, [cameraMode]);
+
+  // Handle Drive Commands directly affecting the differential physics simulation
   const handleDrive = useCallback(
-    (cmd: 'forward' | 'backward' | 'left' | 'right' | 'spin' | 'stop') => {
+    (cmd: DriveControlCommand) => {
       sound.playClick();
       setActiveDriveCommand(cmd);
 
-      if (robotInstanceRef.current) {
-        robotInstanceRef.current.setDriveCommand(cmd, throttleSpeed);
+      // Disable autonomous if user manually commands
+      if (isAutonomous) {
+        setIsAutonomous(false);
+        physicsSimRef.current.setAutonomous(false);
       }
+
+      physicsSimRef.current.setCommand(cmd, throttleSpeed / 100);
 
       if (cmd === 'forward') {
         sound.playBootBeep(520, 0.08);
-        setDiagnosticLog(`MOTOR DRIVE: [FORWARD ${throttleSpeed}% PWM] • Dual H-Bridge Active`);
+        setDiagnosticLog(`MOTOR DRIVE: [FORWARD ${throttleSpeed}% PWM] • Dual Wheels Rotating Synchronized`);
       } else if (cmd === 'backward') {
         sound.playBootBeep(440, 0.08);
-        setDiagnosticLog(`MOTOR DRIVE: [REVERSE ${throttleSpeed}% PWM] • Dual H-Bridge Inverted`);
+        setDiagnosticLog(`MOTOR DRIVE: [REVERSE ${throttleSpeed}% PWM] • Dual Wheels Rotating Reverse`);
       } else if (cmd === 'left') {
         sound.playBootBeep(660, 0.06);
-        setDiagnosticLog('STEERING: [SKID-TURN LEFT] • Differential Gearbox Bias');
+        setDiagnosticLog('DIFFERENTIAL STEERING: [LEFT PIVOT] • Left Wheel Reversed / Right Wheel Forward');
       } else if (cmd === 'right') {
         sound.playBootBeep(660, 0.06);
-        setDiagnosticLog('STEERING: [SKID-TURN RIGHT] • Differential Gearbox Bias');
+        setDiagnosticLog('DIFFERENTIAL STEERING: [RIGHT PIVOT] • Right Wheel Reversed / Left Wheel Forward');
       } else if (cmd === 'spin') {
         sound.playLaserScan();
-        setDiagnosticLog('DYNAMIC MANEUVER: [360° ZERO-RADIUS PIVOT SPIN]');
+        setDiagnosticLog('DIFFERENTIAL MANEUVER: [360° ZERO-RADIUS PIVOT SPIN]');
       } else {
         setDiagnosticLog('BRAKING: [MOTOR HALT] • Regenerative Damping Engaged');
       }
     },
-    [throttleSpeed]
+    [throttleSpeed, isAutonomous]
   );
+
+  // Toggle Autonomous Mode
+  const handleToggleAutonomous = () => {
+    sound.playClick();
+    const nextAuto = !isAutonomous;
+    setIsAutonomous(nextAuto);
+    physicsSimRef.current.setAutonomous(nextAuto);
+
+    if (nextAuto) {
+      sound.playLaserScan();
+      setDiagnosticLog('AUTONOMOUS MODE: [ACTIVE] • Sonar Obstacle Avoidance FSM Engaged');
+      voiceAssistant.speak('Autonomous obstacle avoidance mode activated. Navigating laboratory arena.');
+    } else {
+      setActiveDriveCommand('stop');
+      physicsSimRef.current.setCommand('stop');
+      setDiagnosticLog('AUTONOMOUS MODE: [DISENGAGED] • Returned to Manual Teleoperation');
+      voiceAssistant.speak('Manual teleoperation mode active.');
+    }
+  };
 
   // Keyboard navigation for driving the robot directly in the 3D lab
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Avoid intercepting inputs if user is typing in a textarea or modal
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
 
       if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
@@ -223,13 +279,21 @@ export const RobotProject: React.FC = () => {
       } else if (e.key === ' ' || e.key === 'Escape') {
         e.preventDefault();
         handleDrive('stop');
+      } else if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        handleToggleAutonomous();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        handleResetModel();
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
-        handleDrive('stop');
+        if (!isAutonomous) {
+          handleDrive('stop');
+        }
       }
     };
 
@@ -239,7 +303,7 @@ export const RobotProject: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [handleDrive]);
+  }, [handleDrive, isAutonomous]);
 
   // Voice command controls
   const handleToggleVoice = () => {
@@ -249,15 +313,6 @@ export const RobotProject: React.FC = () => {
       return;
     }
     voiceAssistant.toggleListening();
-  };
-
-  const handleToggleRotate = (explicitState?: boolean) => {
-    sound.playClick();
-    const nextState = explicitState !== undefined ? explicitState : !isAutoRotatingRef.current;
-    setIsAutoRotating(nextState);
-    isAutoRotatingRef.current = nextState;
-    setDiagnosticLog(`3D Auto-Rotation: [${nextState ? 'ENGAGED' : 'PAUSED'}]`);
-    voiceAssistant.speak(nextState ? '3D auto-rotation activated.' : 'Auto-rotation stopped.');
   };
 
   const handleToggleExplodedView = (explicitState?: boolean) => {
@@ -275,41 +330,34 @@ export const RobotProject: React.FC = () => {
 
   const handleResetModel = () => {
     sound.playClick();
-    setIsAutoRotating(false);
-    isAutoRotatingRef.current = false;
+    setIsAutonomous(false);
     setIsExplodedView(false);
     isExplodedViewRef.current = false;
     setActiveDriveCommand('stop');
-    setActiveComponentId('ultrasonic_sensor');
-    targetCameraPosRef.current = { x: 0, y: 0.5, z: 3.2, lookAtY: 0.2 };
+    physicsSimRef.current.reset(new THREE.Vector3(0, 0, 0), 0);
+
     if (robotInstanceRef.current) {
       robotInstanceRef.current.setDriveCommand('stop', throttleSpeed);
-      robotInstanceRef.current.updateFaceCanvas('listening', 48);
+      robotInstanceRef.current.updateFaceCanvas('listening', 250);
+      robotInstanceRef.current.setWheelAngles(0, 0);
+      robotInstanceRef.current.setPanServoAngle(0);
     }
     if (robotGroupRef.current) {
+      robotGroupRef.current.position.set(0, 0, 0);
       robotGroupRef.current.rotation.set(0, 0, 0);
     }
-    setDiagnosticLog('SYSTEM RESET: Default lab camera & home position restored.');
-    voiceAssistant.speak('Robot chassis reset to home position.');
+
+    setDiagnosticLog('SYSTEM RESET: Robot returned to arena center spawn. Sonar recalibrated.');
+    voiceAssistant.speak('Robot chassis reset to home origin.');
   };
 
   // Camera preset viewpoints
-  const handleCameraPreset = (preset: 'overview' | 'sonar' | 'screen' | 'motors' | 'battery') => {
+  const handleSelectCameraMode = (mode: CameraMode) => {
     sound.playClick();
-    if (preset === 'overview') {
-      targetCameraPosRef.current = { x: 1.8, y: 1.2, z: 2.8, lookAtY: 0.2 };
-    } else if (preset === 'sonar') {
-      targetCameraPosRef.current = { x: 0, y: 0.2, z: 2.2, lookAtY: 0.15 };
-      setActiveComponentId('ultrasonic_sensor');
-    } else if (preset === 'screen') {
-      targetCameraPosRef.current = { x: 0, y: 0.7, z: 2.0, lookAtY: 0.6 };
-      setActiveComponentId('robot_display');
-    } else if (preset === 'motors') {
-      targetCameraPosRef.current = { x: 1.6, y: 0.1, z: 1.2, lookAtY: -0.05 };
-      setActiveComponentId('gear_motors');
-    } else if (preset === 'battery') {
-      targetCameraPosRef.current = { x: 0, y: 0.6, z: -2.4, lookAtY: 0.3 };
-      setActiveComponentId('battery_pack');
+    setCameraMode(mode);
+    cameraModeRef.current = mode;
+    if (mode === 'orbit') {
+      orbitAnglesRef.current = { theta: physicsSimRef.current.rotationY + 0.3, phi: 0.4, distance: 3.8 };
     }
   };
 
@@ -325,7 +373,9 @@ export const RobotProject: React.FC = () => {
       const action = customEvent.detail?.action;
       const transcript = (customEvent.detail?.transcript || '').toLowerCase();
 
-      if (transcript.includes('forward') || action === 'robot_forward') {
+      if (transcript.includes('auto') || transcript.includes('explore')) {
+        handleToggleAutonomous();
+      } else if (transcript.includes('forward') || action === 'robot_forward') {
         handleDrive('forward');
       } else if (transcript.includes('back') || transcript.includes('reverse')) {
         handleDrive('backward');
@@ -335,8 +385,6 @@ export const RobotProject: React.FC = () => {
         handleDrive('right');
       } else if (transcript.includes('stop') || transcript.includes('halt')) {
         handleDrive('stop');
-      } else if (transcript.includes('spin') || transcript.includes('rotate')) {
-        handleToggleRotate();
       } else if (transcript.includes('explode') || transcript.includes('disassemble')) {
         handleToggleExplodedView();
       } else if (transcript.includes('reset') || transcript.includes('home')) {
@@ -355,16 +403,16 @@ export const RobotProject: React.FC = () => {
   const runDiagnosticTest = () => {
     sound.playLaserScan();
     setIsSimulatingDiagnostic(true);
-    setDiagnosticLog('INITIALIZING 4-WHEEL DIFFERENTIAL DRIVE & SONAR RADAR CALIBRATION...');
+    setDiagnosticLog('INITIALIZING 2-WHEEL DIFFERENTIAL DRIVE & SONAR RADAR CALIBRATION...');
 
     setTimeout(() => {
-      setDiagnosticLog(`HC-SR04 SONAR: 40kHz acoustic echo verified @ ${obstacleDistance}cm. Sweep servo nominal.`);
+      setDiagnosticLog(`HC-SR04 SONAR: 40kHz acoustic echo verified @ ${telemetry.ultrasonicDistanceCm}cm. Raycast verified.`);
       sound.playBootBeep(880, 0.05);
     }, 600);
 
     setTimeout(() => {
       setDiagnosticLog(
-        `RASPBERRY PI & L298N: 4x TT DC motors synchronized @ ${throttleSpeed}% PWM. 7.85V battery rail nominal.`
+        `L298N H-BRIDGE: TT DC motors calibrated @ ${throttleSpeed}% PWM. Left RPM: ${telemetry.leftWheelRpm}, Right RPM: ${telemetry.rightWheelRpm}.`
       );
       sound.playSuccessChime();
       setIsSimulatingDiagnostic(false);
@@ -378,11 +426,11 @@ export const RobotProject: React.FC = () => {
 
     // 1. Scene & Depth Fog
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x030712, 0.028);
+    scene.fog = new THREE.FogExp2(0x030712, 0.022);
 
     // 2. Camera
     const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
-    camera.position.set(0, 0.5, 3.2);
+    camera.position.set(0, 2.5, 4.8);
     cameraRef.current = camera;
 
     // 3. WebGL Renderer
@@ -407,42 +455,31 @@ export const RobotProject: React.FC = () => {
     scene.environment = labEnvTexture;
 
     // 5. Studio Lighting Rig
-    const ambientLight = new THREE.AmbientLight(0x0f172a, 1.8);
+    const ambientLight = new THREE.AmbientLight(0x0f172a, 2.2);
     scene.add(ambientLight);
 
-    const keySpotlight = new THREE.SpotLight(0xffffff, 5.2, 18, Math.PI / 3.6, 0.35, 1.0);
-    keySpotlight.position.set(3.0, 5.5, 3.5);
+    const keySpotlight = new THREE.SpotLight(0xffffff, 5.5, 26, Math.PI / 3.2, 0.35, 1.0);
+    keySpotlight.position.set(4.0, 8.0, 5.0);
     keySpotlight.castShadow = true;
     keySpotlight.shadow.mapSize.width = 1024;
     keySpotlight.shadow.mapSize.height = 1024;
     keySpotlight.shadow.bias = -0.0001;
     scene.add(keySpotlight);
 
-    const cyanRimLight = new THREE.DirectionalLight(0x00f0ff, 3.2);
-    cyanRimLight.position.set(-3.5, 2.5, -2.5);
+    const cyanRimLight = new THREE.DirectionalLight(0x00f0ff, 3.5);
+    cyanRimLight.position.set(-6.0, 4.5, -4.5);
     scene.add(cyanRimLight);
 
-    const amberFillLight = new THREE.PointLight(0xf59e0b, 2.4, 10);
-    amberFillLight.position.set(2.5, 1.0, -2.0);
+    const amberFillLight = new THREE.PointLight(0xf59e0b, 2.8, 16);
+    amberFillLight.position.set(4.5, 2.0, -3.5);
     scene.add(amberFillLight);
 
-    // 6. Grid Ground Plane
-    const gridHelper = new THREE.GridHelper(20, 20, 0x00f0ff, 0x1e293b);
-    gridHelper.position.y = -0.45;
-    gridHelper.material.opacity = 0.35;
-    gridHelper.material.transparent = true;
-    scene.add(gridHelper);
+    // 6. Realistic Robotics Testing Arena (Perimeter Walls, Cargo Crates, Safety Barrels)
+    const arena = createRoboticsArena();
+    arenaRef.current = arena;
+    scene.add(arena.sceneGroup);
 
-    const floorShadowPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(16, 16),
-      new THREE.ShadowMaterial({ opacity: 0.48 })
-    );
-    floorShadowPlane.rotation.x = -Math.PI / 2;
-    floorShadowPlane.position.y = -0.455;
-    floorShadowPlane.receiveShadow = true;
-    scene.add(floorShadowPlane);
-
-    // 7. Wheeled Robotic Car 3D Model Instance
+    // 7. Wheeled Robotic Vehicle 3D Model Instance
     const robotInstance = createWheeledRobot(1.0, selectedFinish);
     robotInstanceRef.current = robotInstance;
     const robotGroup = robotInstance.rootGroup;
@@ -456,7 +493,7 @@ export const RobotProject: React.FC = () => {
       }
     });
 
-    // 8. Raycasting & Mouse Drag Orbit Controls
+    // 8. Raycasting for Clickable Hotspots & Mouse Orbit Controls
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
@@ -502,8 +539,9 @@ export const RobotProject: React.FC = () => {
         hasMovedMuch = true;
       }
 
-      robotGroup.rotation.y += dx * 0.008;
-      robotGroup.rotation.x = Math.max(-0.4, Math.min(0.4, robotGroup.rotation.x + dy * 0.004));
+      // Orbit camera around robot in orbit mode or follow mode
+      orbitAnglesRef.current.theta += dx * 0.008;
+      orbitAnglesRef.current.phi = Math.max(0.1, Math.min(1.4, orbitAnglesRef.current.phi + dy * 0.006));
       prevX = e.clientX;
       prevY = e.clientY;
     };
@@ -518,16 +556,14 @@ export const RobotProject: React.FC = () => {
         const intersects = raycaster.intersectObjects(robotInstance.clickableObjects, true);
 
         if (intersects.length > 0) {
+          sound.playLaserScan();
           const hit = intersects[0].object;
-          const compId = hit.userData.componentId;
-          if (compId) {
-            sound.playClick();
-            setActiveComponentId(compId);
-            const foundComp = WHEELED_ROBOT_COMPONENTS.find((c) => c.id === compId);
-            if (foundComp) {
-              targetCameraPosRef.current = foundComp.cameraTarget;
-            }
-            setDiagnosticLog(`INSPECTING 3D COMPONENT: [${(hit.userData.componentName || compId).toUpperCase()}]`);
+          const compId = hit.userData.componentId || 'ultrasonic_sensor';
+          setActiveComponentId(compId);
+          const found = WHEELED_ROBOT_COMPONENTS.find((c) => c.id === compId);
+          if (found) {
+            setDiagnosticLog(`INSPECTION: [${found.title.toUpperCase()}] • Focused for Deep Dive.`);
+            voiceAssistant.speak(`${found.name} selected.`);
           }
         }
       }
@@ -536,8 +572,7 @@ export const RobotProject: React.FC = () => {
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const zoomFactor = e.deltaY * 0.002;
-      targetCameraPosRef.current.z = Math.max(1.4, Math.min(5.5, targetCameraPosRef.current.z + zoomFactor));
+      orbitAnglesRef.current.distance = Math.max(1.8, Math.min(9.5, orbitAnglesRef.current.distance + e.deltaY * 0.005));
     };
 
     container.addEventListener('mousedown', onMouseDown);
@@ -545,7 +580,7 @@ export const RobotProject: React.FC = () => {
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
 
-    // Touch Support
+    // Touch controls for mobile
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length > 0) {
         isDragging = true;
@@ -557,8 +592,8 @@ export const RobotProject: React.FC = () => {
       if (!isDragging || e.touches.length === 0) return;
       const dx = e.touches[0].clientX - prevX;
       const dy = e.touches[0].clientY - prevY;
-      robotGroup.rotation.y += dx * 0.008;
-      robotGroup.rotation.x = Math.max(-0.4, Math.min(0.4, robotGroup.rotation.x + dy * 0.004));
+      orbitAnglesRef.current.theta += dx * 0.008;
+      orbitAnglesRef.current.phi = Math.max(0.1, Math.min(1.4, orbitAnglesRef.current.phi + dy * 0.006));
       prevX = e.touches[0].clientX;
       prevY = e.touches[0].clientY;
     };
@@ -579,50 +614,119 @@ export const RobotProject: React.FC = () => {
     };
     window.addEventListener('resize', handleResize);
 
-    // 9. Master Animation Loop
+    // 9. Master Physics & Animation Loop (60 FPS)
     let clock = new THREE.Clock();
     let animId: number;
+    let telemetryThrottleTimer = 0;
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
       const delta = clock.getDelta();
       const elapsedTime = clock.getElapsedTime();
 
-      // Camera Smooth Interpolation
-      const targetPos = targetCameraPosRef.current;
-      camera.position.x += (targetPos.x - camera.position.x) * 0.06;
-      camera.position.y += (targetPos.y - camera.position.y) * 0.06;
-      camera.position.z += (targetPos.z - camera.position.z) * 0.06;
-      camera.lookAt(0, targetPos.lookAtY, 0);
+      const sim = physicsSimRef.current;
+      const currentArena = arenaRef.current;
 
-      // Auto-Rotation
-      if (isAutoRotatingRef.current && !isDragging) {
-        robotGroup.rotation.y += 0.008;
+      // 1. Step Differential-Drive Kinematics & Ultrasonic Raycasting
+      if (currentArena) {
+        sim.update(delta, currentArena.obstacleMeshes, currentArena.obstacles, currentArena.arenaBounds);
       }
 
-      // Exploded View Disassembly Animation
+      // 2. Sync 3D Model Root Group to Physics State
+      robotGroup.position.set(sim.position.x, sim.position.y, sim.position.z);
+      robotGroup.rotation.y = sim.rotationY;
+
+      // 3. Sync Individual Wheel Physical Rotations & Pan Servo
+      robotInstance.setWheelAngles(sim.leftWheelAngle, sim.rightWheelAngle);
+      robotInstance.setPanServoAngle(sim.panServoAngle);
+
+      // 4. Update Dynamic Sonar Ray/Cone Visualizer & Warning State
+      robotInstance.updateSonarRay(sim.ultrasonicDistanceCm, sim.obstacleState, sim.isAutonomous);
+
+      // 5. Update Dynamic Emotive Robot Eyes & Face Canvas
+      let faceExpr: 'listening' | 'scanning' | 'excited' | 'alert' | 'idle' = selectedExpression;
+      if (sim.obstacleState === 'CRITICAL_STOP') {
+        faceExpr = 'alert';
+      } else if (sim.isAutonomous || Math.abs(sim.panServoAngle) > 0.1) {
+        faceExpr = 'scanning';
+      } else if (Math.abs(sim.currentLeftVel) > 0.5 || Math.abs(sim.currentRightVel) > 0.5) {
+        faceExpr = 'excited';
+      }
+      robotInstance.updateFaceCanvas(faceExpr, sim.ultrasonicDistanceCm);
+
+      // 6. Camera Navigation Modes (Follow Chase, Free Orbit, Tactical, Sonar POV)
+      const currentCamMode = cameraModeRef.current;
+      const rPos = sim.position;
+      const rHeading = sim.rotationY;
+
+      if (currentCamMode === 'follow') {
+        // Chase Cam: Follows behind robot heading
+        const followDist = 3.6;
+        const followHeight = 1.6;
+        const targetCamX = rPos.x - Math.sin(rHeading) * followDist;
+        const targetCamZ = rPos.z - Math.cos(rHeading) * followDist;
+        const targetCamY = rPos.y + followHeight;
+
+        camera.position.x += (targetCamX - camera.position.x) * 0.08;
+        camera.position.y += (targetCamY - camera.position.y) * 0.08;
+        camera.position.z += (targetCamZ - camera.position.z) * 0.08;
+        camera.lookAt(rPos.x, rPos.y + 0.35, rPos.z);
+      } else if (currentCamMode === 'orbit') {
+        // Free Orbit / Inspector Cam around robot
+        const { theta, phi, distance } = orbitAnglesRef.current;
+        const camX = rPos.x + distance * Math.sin(phi) * Math.sin(theta);
+        const camY = rPos.y + distance * Math.cos(phi);
+        const camZ = rPos.z + distance * Math.sin(phi) * Math.cos(theta);
+
+        camera.position.x += (camX - camera.position.x) * 0.1;
+        camera.position.y += (camY - camera.position.y) * 0.1;
+        camera.position.z += (camZ - camera.position.z) * 0.1;
+        camera.lookAt(rPos.x, rPos.y + 0.25, rPos.z);
+      } else if (currentCamMode === 'tactical') {
+        // Top-Down Arena Overview
+        camera.position.x += (0 - camera.position.x) * 0.06;
+        camera.position.y += (14.0 - camera.position.y) * 0.06;
+        camera.position.z += (0.1 - camera.position.z) * 0.06;
+        camera.lookAt(0, 0, 0);
+      } else if (currentCamMode === 'sonar_pov') {
+        // First-Person Sonar Perspective
+        const povOffset = new THREE.Vector3(0, 0.45, 0.6);
+        povOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), rHeading);
+        const povPos = rPos.clone().add(povOffset);
+        camera.position.copy(povPos);
+
+        const lookTarget = povPos.clone().add(
+          new THREE.Vector3(
+            Math.sin(rHeading + sim.panServoAngle) * 5,
+            -0.2,
+            Math.cos(rHeading + sim.panServoAngle) * 5
+          )
+        );
+        camera.lookAt(lookTarget);
+      }
+
+      // 7. Exploded View Disassembly Animation (if active)
       const targetExplode = isExplodedViewRef.current ? 1.0 : 0.0;
       explodeProgressRef.current += (targetExplode - explodeProgressRef.current) * 0.08;
       const ep = explodeProgressRef.current;
 
       if (robotInstance) {
-        // Disassemble components in 3D
         robotInstance.screenGroup.position.y = 0.65 + ep * 0.55;
         robotInstance.chassisTop.position.y = 0.22 + ep * 0.35;
         robotInstance.batteryPack.position.z = -0.52 - ep * 0.45;
         robotInstance.sensorPanGroup.position.z = 0.92 + ep * 0.45;
 
-        // Spread wheels laterally outward
         robotInstance.wheelFrontLeft.position.x = -0.78 - ep * 0.35;
         robotInstance.wheelRearLeft.position.x = -0.78 - ep * 0.35;
         robotInstance.wheelFrontRight.position.x = 0.78 + ep * 0.35;
         robotInstance.wheelRearRight.position.x = 0.78 + ep * 0.35;
+      }
 
-        // Run kinematic animation for wheels, eyes, pan servo, and sonar wave
-        robotInstance.animate(elapsedTime, delta, {
-          isScanning: isScanning,
-          obstacleCm: obstacleDistance,
-        });
+      // 8. Throttled Telemetry State Update (~30 FPS) for UI HUD
+      telemetryThrottleTimer += delta;
+      if (telemetryThrottleTimer > 0.033) {
+        telemetryThrottleTimer = 0;
+        setTelemetry(sim.getTelemetry());
       }
 
       renderer.render(scene, camera);
@@ -640,12 +744,15 @@ export const RobotProject: React.FC = () => {
       container.removeEventListener('mousedown', onMouseDown);
       container.removeEventListener('wheel', onWheel);
       container.removeEventListener('touchstart', onTouchStart);
+      if (arenaRef.current) {
+        arenaRef.current.dispose();
+      }
       if (renderer.domElement && container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
       renderer.dispose();
     };
-  }, [selectedFinish, isScanning, obstacleDistance]);
+  }, [selectedFinish, selectedExpression]);
 
   // Update robot finish
   useEffect(() => {
@@ -659,7 +766,7 @@ export const RobotProject: React.FC = () => {
     sound.playClick();
     setSelectedExpression(expr);
     if (robotInstanceRef.current) {
-      robotInstanceRef.current.updateFaceCanvas(expr, obstacleDistance);
+      robotInstanceRef.current.updateFaceCanvas(expr, telemetry.ultrasonicDistanceCm);
     }
   };
 
@@ -671,18 +778,18 @@ export const RobotProject: React.FC = () => {
           <div>
             <div className="flex items-center gap-2 text-xs font-mono text-cyan-400 tracking-widest uppercase mb-2">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-              <span>// PROJECT SHOWCASE • AUTONOMOUS SMART ROBOTIC CAR //</span>
+              <span>// EMBEDDED ROBOTICS LAB • 2-WHEEL DIFFERENTIAL DRIVE VEHICLE //</span>
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold font-display text-white tracking-tight">
               INTERACTIVE ROBOTICS LAB
             </h2>
             <p className="text-sm font-mono text-cyan-300/90 mt-1">
-              Raspberry Pi • OpenCV Neural Vision • HC-SR04 Sonar • FreeRTOS Motor Control
+              Differential-Drive Physics • HC-SR04 Sonar Raycasting • Autonomous Avoidance FSM
             </p>
             <p className="text-xs font-mono text-slate-400 mt-2 max-w-2xl leading-relaxed">
-              An intelligent 4WD mobile robotic vehicle equipped with a top-mounted Raspberry Pi animated emotive LCD
-              display, front HC-SR04 ultrasonic radar, dual-tier acrylic chassis, and high-torque TT DC gear motors with
-              deep-tread traction wheels.
+              A physical 2-wheel differential-drive autonomous rover with front HC-SR04 ultrasonic sonar, top Raspberry
+              Pi emotive face LCD, dual yellow TT gear motors, and real-time obstacle distance detection in a 3D
+              engineering arena.
             </p>
           </div>
 
@@ -738,7 +845,6 @@ export const RobotProject: React.FC = () => {
                   onClick={() => {
                     sound.playClick();
                     setActiveComponentId(comp.id);
-                    targetCameraPosRef.current = comp.cameraTarget;
                     setDiagnosticLog(`FOCUSED: [${comp.title.toUpperCase()}]`);
                   }}
                   onMouseEnter={() => sound.playHover()}
@@ -780,7 +886,13 @@ export const RobotProject: React.FC = () => {
 
                   <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-slate-800/60 text-[10px] font-mono text-slate-400">
                     <span className="text-cyan-400 font-semibold">{comp.telemetry[0].label}:</span>
-                    <span className="text-slate-300">{comp.telemetry[0].value}</span>
+                    <span className="text-slate-300">
+                      {comp.id === 'ultrasonic_sensor'
+                        ? `${telemetry.ultrasonicDistanceCm} cm`
+                        : comp.id === 'gear_motors'
+                        ? `${telemetry.leftWheelRpm} RPM`
+                        : comp.telemetry[0].value}
+                    </span>
                   </div>
                 </button>
               );
@@ -789,7 +901,7 @@ export const RobotProject: React.FC = () => {
         </div>
 
         {/* Center Column: Dominant Hero 3D Robot Visualizer & Direct Control Pad */}
-        <div className="lg:col-span-6 flex flex-col rounded-2xl bg-slate-950/80 border border-slate-800/90 relative overflow-hidden shadow-2xl min-h-[600px]">
+        <div className="lg:col-span-6 flex flex-col rounded-2xl bg-slate-950/80 border border-slate-800/90 relative overflow-hidden shadow-2xl min-h-[620px]">
           {/* Subtle Cyber Corner Marks */}
           <div className="cyber-corner-tl" />
           <div className="cyber-corner-tr" />
@@ -798,51 +910,68 @@ export const RobotProject: React.FC = () => {
 
           {/* Top Floating Action & Viewport Bar */}
           <div className="absolute top-3 left-3 right-3 z-30 flex flex-wrap items-center justify-between gap-2 p-2 rounded-xl bg-slate-950/85 backdrop-blur-md border border-slate-800 text-xs font-mono shadow-xl">
-            {/* Camera View Presets */}
+            {/* Camera View Mode Presets */}
             <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-lg border border-slate-800 text-[11px]">
               <span className="text-[10px] text-slate-400 px-1.5 font-semibold flex items-center gap-1">
                 <Camera className="w-3 h-3 text-cyan-400" />
-                VIEW:
+                CAM:
               </span>
               <button
-                onClick={() => handleCameraPreset('overview')}
-                className="px-2 py-0.5 rounded text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
+                onClick={() => handleSelectCameraMode('follow')}
+                className={`px-2 py-0.5 rounded cursor-pointer transition-all ${
+                  cameraMode === 'follow'
+                    ? 'bg-cyan-500 text-slate-950 font-bold shadow-[0_0_8px_rgba(0,240,255,0.4)]'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
               >
-                Overview
+                Follow
               </button>
               <button
-                onClick={() => handleCameraPreset('sonar')}
-                className="px-2 py-0.5 rounded text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
+                onClick={() => handleSelectCameraMode('orbit')}
+                className={`px-2 py-0.5 rounded cursor-pointer transition-all ${
+                  cameraMode === 'orbit'
+                    ? 'bg-cyan-500 text-slate-950 font-bold shadow-[0_0_8px_rgba(0,240,255,0.4)]'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
               >
-                Sonar
+                Orbit
               </button>
               <button
-                onClick={() => handleCameraPreset('screen')}
-                className="px-2 py-0.5 rounded text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
+                onClick={() => handleSelectCameraMode('tactical')}
+                className={`px-2 py-0.5 rounded cursor-pointer transition-all ${
+                  cameraMode === 'tactical'
+                    ? 'bg-cyan-500 text-slate-950 font-bold shadow-[0_0_8px_rgba(0,240,255,0.4)]'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
               >
-                Face LCD
+                Tactical Top
               </button>
               <button
-                onClick={() => handleCameraPreset('motors')}
-                className="px-2 py-0.5 rounded text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
+                onClick={() => handleSelectCameraMode('sonar_pov')}
+                className={`px-2 py-0.5 rounded cursor-pointer transition-all ${
+                  cameraMode === 'sonar_pov'
+                    ? 'bg-cyan-500 text-slate-950 font-bold shadow-[0_0_8px_rgba(0,240,255,0.4)]'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
               >
-                Motors
+                Sonar POV
               </button>
             </div>
 
             {/* Quick Action Toggles */}
             <div className="flex items-center gap-1.5">
-              {/* Rotate 360 */}
+              {/* Autonomous Mode Toggle Button */}
               <button
-                onClick={() => handleToggleRotate()}
-                title="Toggle continuous 360° rotation"
-                className={`p-2 rounded-lg transition-all cursor-pointer ${
-                  isAutoRotating
-                    ? 'bg-cyan-500 text-slate-950 shadow-[0_0_10px_rgba(0,240,255,0.4)]'
-                    : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
+                onClick={handleToggleAutonomous}
+                title="Toggle Autonomous Obstacle-Avoidance Mode (T)"
+                className={`px-2.5 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                  isAutonomous
+                    ? 'bg-emerald-500 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.5)] border border-emerald-400 animate-pulse'
+                    : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-emerald-300 hover:border-emerald-500/50'
                 }`}
               >
-                <RotateCw className={`w-3.5 h-3.5 ${isAutoRotating ? 'animate-spin' : ''}`} />
+                <Radar className="w-3.5 h-3.5" />
+                <span>{isAutonomous ? 'AUTO AVOID: ON' : 'AUTO MODE'}</span>
               </button>
 
               {/* Exploded View Disassembly */}
@@ -858,10 +987,10 @@ export const RobotProject: React.FC = () => {
                 <Layers className="w-3.5 h-3.5" />
               </button>
 
-              {/* Reset View */}
+              {/* Reset to Spawn */}
               <button
                 onClick={handleResetModel}
-                title="Reset robot viewport & pose"
+                title="Reset robot position to arena center (R)"
                 className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-cyan-300 cursor-pointer transition-all"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -887,12 +1016,23 @@ export const RobotProject: React.FC = () => {
             ref={canvasContainerRef}
             id="robot-3d-canvas"
             className="w-full flex-1 min-h-[460px] cursor-grab active:cursor-grabbing"
-            title="Drag to orbit in 360° • Scroll to zoom • Click any component to inspect"
+            title="Drive using WASD / Arrow Keys • Click to inspect • Orbit with mouse drag"
           />
+
+          {/* Live Floating Sonar Obstacle Alert Banner */}
+          {telemetry.obstacleState === 'CRITICAL_STOP' && (
+            <div className="absolute top-16 left-4 right-4 z-20 px-3.5 py-2 rounded-xl bg-rose-950/90 backdrop-blur-md border border-rose-500 text-rose-200 font-mono text-xs shadow-[0_0_20px_rgba(244,63,94,0.4)] animate-pulse flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-rose-400" />
+                <span className="font-bold">OBSTACLE DETECTED ({telemetry.ultrasonicDistanceCm} cm): FORWARD DRIVE INHIBITED</span>
+              </div>
+              <span className="text-[10px] bg-rose-900/80 px-2 py-0.5 rounded text-white font-bold">EMERGENCY STOP</span>
+            </div>
+          )}
 
           {/* Hovered Zone Floating Tag */}
           {hoveredPartName && (
-            <div className="absolute top-16 right-4 z-20 px-3 py-1.5 rounded-lg bg-slate-950/85 backdrop-blur-md border border-cyan-500/50 text-cyan-300 font-mono text-xs shadow-[0_0_15px_rgba(0,240,255,0.25)] pointer-events-none animate-in fade-in flex items-center gap-2">
+            <div className="absolute top-28 right-4 z-20 px-3 py-1.5 rounded-lg bg-slate-950/85 backdrop-blur-md border border-cyan-500/50 text-cyan-300 font-mono text-xs shadow-[0_0_15px_rgba(0,240,255,0.25)] pointer-events-none animate-in fade-in flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
               <span>COMPONENT: {hoveredPartName.toUpperCase()}</span>
             </div>
@@ -967,7 +1107,7 @@ export const RobotProject: React.FC = () => {
                 </button>
                 <button
                   onClick={() => handleDrive('spin')}
-                  title="360° Spin"
+                  title="360° Differential Pivot Spin"
                   className={`p-2 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
                     activeDriveCommand === 'spin'
                       ? 'bg-purple-600 text-white border-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.5)]'
@@ -979,8 +1119,8 @@ export const RobotProject: React.FC = () => {
               </div>
 
               <div className="text-[11px] text-slate-400 leading-tight hidden sm:block">
-                <span className="text-cyan-400 font-bold block">4WD SKID STEER</span>
-                <span>WASD / Arrow Keys</span>
+                <span className="text-cyan-400 font-bold block">DIFFERENTIAL DRIVE</span>
+                <span>W A S D / Space (Stop)</span>
               </div>
             </div>
 
@@ -996,9 +1136,7 @@ export const RobotProject: React.FC = () => {
                   onChange={(e) => {
                     const val = Number(e.target.value);
                     setThrottleSpeed(val);
-                    if (robotInstanceRef.current && activeDriveCommand !== 'stop') {
-                      robotInstanceRef.current.setDriveCommand(activeDriveCommand, val);
-                    }
+                    physicsSimRef.current.throttle = val / 100;
                   }}
                   className="w-28 accent-cyan-400 h-1.5 bg-slate-800 rounded cursor-pointer"
                 />
@@ -1031,13 +1169,110 @@ export const RobotProject: React.FC = () => {
           <div className="flex items-center justify-between px-1 pb-1">
             <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              ENGINEERING INSPECTOR
+              LIVE TELEMETRY HUD
             </span>
-            <span className="text-[10px] font-mono text-emerald-400 font-semibold">1,000 Hz TELEMETRY</span>
+            <span className="text-[10px] font-mono text-emerald-400 font-semibold">1,000 Hz MOTOR LOOP</span>
           </div>
 
-          {/* Card 1: Active Component Details & Working Principle */}
-          <div className="p-4 rounded-xl bg-slate-950/80 border border-cyan-500/30 backdrop-blur-md space-y-3 font-mono flex-1 flex flex-col justify-between shadow-xl">
+          {/* Card 1: Live Physics Telemetry Deck */}
+          <div className="p-4 rounded-xl bg-slate-950/85 border border-cyan-500/30 backdrop-blur-md space-y-3 font-mono shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-cyan-400" />
+                <span className="text-xs font-bold text-white">KINEMATICS & SENSORS</span>
+              </div>
+              <span
+                className={`text-[9px] px-2 py-0.5 rounded font-bold ${
+                  telemetry.obstacleState === 'CRITICAL_STOP'
+                    ? 'bg-rose-950 text-rose-300 border border-rose-600 animate-pulse'
+                    : telemetry.obstacleState === 'WARNING'
+                    ? 'bg-amber-950 text-amber-300 border border-amber-600'
+                    : 'bg-emerald-950 text-emerald-300 border border-emerald-600'
+                }`}
+              >
+                {telemetry.obstacleState === 'CRITICAL_STOP'
+                  ? 'OBSTACLE DETECTED'
+                  : telemetry.obstacleState === 'WARNING'
+                  ? 'CAUTION (15-50cm)'
+                  : 'PATH CLEAR'}
+              </span>
+            </div>
+
+            {/* Ultrasonic Sonar Raycasting Live Measurement */}
+            <div className="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 space-y-1.5">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-400 flex items-center gap-1.5">
+                  <Radio className="w-3.5 h-3.5 text-cyan-400" />
+                  HC-SR04 SONAR DISTANCE:
+                </span>
+                <span
+                  className={`font-bold text-sm ${
+                    telemetry.ultrasonicDistanceCm < 16
+                      ? 'text-rose-400 animate-pulse'
+                      : telemetry.ultrasonicDistanceCm < 48
+                      ? 'text-amber-400'
+                      : 'text-emerald-400'
+                  }`}
+                >
+                  {telemetry.ultrasonicDistanceCm} cm
+                </span>
+              </div>
+
+              {/* Distance Bar Visualizer */}
+              <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-100 ${
+                    telemetry.ultrasonicDistanceCm < 16
+                      ? 'bg-rose-500'
+                      : telemetry.ultrasonicDistanceCm < 48
+                      ? 'bg-amber-500'
+                      : 'bg-cyan-400'
+                  }`}
+                  style={{ width: `${Math.min(100, (telemetry.ultrasonicDistanceCm / 200) * 100)}%` }}
+                />
+              </div>
+
+              {telemetry.detectedObstacleName && (
+                <div className="text-[10px] text-slate-400 flex justify-between pt-0.5">
+                  <span>TARGET:</span>
+                  <span className="text-cyan-300 truncate max-w-[160px] font-semibold">{telemetry.detectedObstacleName}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Differential Left & Right Wheel Velocity Grid */}
+            <div className="grid grid-cols-2 gap-2 text-[10px]">
+              <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800/80">
+                <span className="text-slate-400 block mb-0.5">LEFT WHEEL:</span>
+                <div className="text-cyan-300 font-bold text-xs">{telemetry.leftWheelRpm} RPM</div>
+                <span className="text-slate-500">{telemetry.leftWheelSpeedMs} m/s</span>
+              </div>
+              <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800/80">
+                <span className="text-slate-400 block mb-0.5">RIGHT WHEEL:</span>
+                <div className="text-cyan-300 font-bold text-xs">{telemetry.rightWheelRpm} RPM</div>
+                <span className="text-slate-500">{telemetry.rightWheelSpeedMs} m/s</span>
+              </div>
+            </div>
+
+            {/* Speed, Heading & Battery */}
+            <div className="space-y-1 text-[10px] pt-1">
+              <div className="flex justify-between items-center py-1 border-b border-slate-800/50">
+                <span className="text-slate-400">ROBOT LINEAR VELOCITY:</span>
+                <span className="text-slate-200 font-bold">{telemetry.linearSpeedCms} cm/s ({telemetry.linearSpeedMs} m/s)</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-800/50">
+                <span className="text-slate-400">HEADING / COMPASS:</span>
+                <span className="text-amber-400 font-bold">{telemetry.headingDeg}° [{telemetry.headingCompass}]</span>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span className="text-slate-400">BATTERY POWER (2S):</span>
+                <span className="text-emerald-400 font-bold">🔋 {telemetry.batteryVoltage}V ({telemetry.batteryPercent}%)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Active Component Deep-Dive Inspection Panel */}
+          <div className="p-4 rounded-xl bg-slate-950/85 border border-slate-800/90 backdrop-blur-md space-y-3 font-mono flex-1 flex flex-col justify-between shadow-xl">
             <div>
               <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2">
                 <div className="flex items-center gap-2">
@@ -1057,12 +1292,12 @@ export const RobotProject: React.FC = () => {
               {/* Working Principle & Purpose */}
               <div className="space-y-2 text-[11px] text-slate-300 leading-relaxed">
                 <div>
-                  <span className="text-cyan-400 font-semibold block text-[10px]">HOW IT WORKS IN THE ROBOT:</span>
+                  <span className="text-cyan-400 font-semibold block text-[10px]">FUNCTION & WORKING PRINCIPLE:</span>
                   <p className="text-slate-400 text-[11px] mt-0.5 leading-relaxed">{activeComponent.howItWorks}</p>
                 </div>
 
                 <div className="pt-2 border-t border-slate-800/60">
-                  <span className="text-amber-400 font-semibold block text-[10px] mb-1">TECHNICAL SPECIFICATIONS:</span>
+                  <span className="text-amber-400 font-semibold block text-[10px] mb-1">SPECIFICATIONS:</span>
                   <div className="space-y-1">
                     {activeComponent.specs.slice(0, 3).map((spec, i) => (
                       <div key={i} className="flex items-start gap-1.5 text-[10px] text-slate-300">
@@ -1075,65 +1310,21 @@ export const RobotProject: React.FC = () => {
               </div>
             </div>
 
-            {/* Hardware Pinout & Voltage Chips */}
-            <div className="space-y-2 pt-2 border-t border-slate-800/80 text-[10px]">
-              <div className="flex justify-between items-center bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                <span className="text-slate-400">PINOUT:</span>
-                <span className="text-cyan-300 font-bold truncate max-w-[170px]">{activeComponent.pinout}</span>
-              </div>
-              <div className="flex justify-between items-center bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                <span className="text-slate-400">VOLTAGE:</span>
-                <span className="text-amber-400 font-bold">{activeComponent.voltage}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: Ultrasonic Sonar Radar Simulation Slider */}
-          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/90 backdrop-blur-md space-y-3 font-mono shadow-xl">
-            <div>
-              <div className="flex justify-between text-[11px] text-slate-400 mb-1">
-                <span>HC-SR04 SONAR DISTANCE:</span>
-                <span
-                  className={`font-bold ${
-                    obstacleDistance < 18 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'
-                  }`}
-                >
-                  {obstacleDistance} cm {obstacleDistance < 18 ? '[OBSTACLE CLOSE!]' : '[PATH CLEAR]'}
-                </span>
-              </div>
-              <input
-                type="range"
-                min="5"
-                max="150"
-                value={obstacleDistance}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setObstacleDistance(val);
-                  if (val < 18) {
-                    sound.playErrorTone();
-                    if (robotInstanceRef.current) {
-                      robotInstanceRef.current.updateFaceCanvas('alert', val);
-                    }
-                  }
-                }}
-                className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded cursor-pointer"
-              />
-            </div>
-
-            <div className="pt-1">
+            {/* Diagnostic Button & Log */}
+            <div className="pt-2 space-y-2 border-t border-slate-800/80">
               <button
                 onClick={runDiagnosticTest}
                 disabled={isSimulatingDiagnostic}
                 className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-[0_0_15px_rgba(0,240,255,0.3)] disabled:opacity-50 cursor-pointer"
               >
                 <Play className="w-3.5 h-3.5 fill-slate-950" />
-                <span>{isSimulatingDiagnostic ? 'CALCULATING SENSORS...' : 'RUN SENSOR DIAGNOSTIC'}</span>
+                <span>{isSimulatingDiagnostic ? 'CALIBRATING SENSORS...' : 'RUN FULL DIAGNOSTIC'}</span>
               </button>
-            </div>
 
-            <p className="text-[10px] text-slate-400 bg-slate-900/90 p-2 rounded-lg border border-slate-800/80 truncate">
-              {diagnosticLog}
-            </p>
+              <p className="text-[10px] text-slate-400 bg-slate-900/90 p-2 rounded-lg border border-slate-800/80 truncate">
+                {diagnosticLog}
+              </p>
+            </div>
           </div>
         </div>
       </div>
