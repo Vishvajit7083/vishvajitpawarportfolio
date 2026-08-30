@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Cpu, Wifi, Bot, Eye, Radio, Sparkles, CheckCircle, ShieldCheck, Award, Terminal, Scan } from 'lucide-react';
 import { PERSONAL_INFO } from '../data/portfolioData';
 import { soundFx } from '../utils/audio';
+import { ScrollReveal } from './ScrollReveal';
+import { TiltCard } from './TiltCard';
 
 interface IndicatorItem {
   id: string;
@@ -76,25 +78,27 @@ export const About: React.FC = () => {
   return (
     <section id="about" className="relative w-full py-20 px-4 sm:px-8 max-w-7xl mx-auto z-20">
       {/* Section Header */}
-      <div className="flex items-center gap-3 mb-10">
-        <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
-          <Terminal className="w-5 h-5" />
-        </div>
-        <div>
-          <div className="text-xs font-mono text-cyan-400 tracking-widest uppercase">
-            // PROFILE_METADATA_EXTRACT
+      <ScrollReveal direction="up">
+        <div className="flex items-center gap-3 mb-10">
+          <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+            <Terminal className="w-5 h-5" />
           </div>
-          <h2 className="text-3xl sm:text-4xl font-bold font-display text-[var(--text-primary)] tracking-wide">
-            ENGINEERING PROFILE & ABOUT ME
-          </h2>
+          <div>
+            <div className="text-xs font-mono text-cyan-400 tracking-widest uppercase">
+              // PROFILE_METADATA_EXTRACT
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-bold font-display text-[var(--text-primary)] tracking-wide">
+              ENGINEERING PROFILE & ABOUT ME
+            </h2>
+          </div>
         </div>
-      </div>
+      </ScrollReveal>
 
       {/* Main Holographic Profile Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Holographic Photo & Hardware Scanner Card */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="relative glass-panel-glow p-6 rounded-2xl border border-[var(--border-primary)] shadow-[var(--shadow-glow)] overflow-hidden">
+        <ScrollReveal direction="up" delay={0.1} className="lg:col-span-5">
+          <TiltCard maxTilt={5} className="relative glass-panel-glow p-6 rounded-2xl border border-[var(--border-primary)] shadow-[var(--shadow-glow)] overflow-hidden space-y-4">
             <div className="cyber-corner-tl" />
             <div className="cyber-corner-tr" />
             <div className="cyber-corner-bl" />
@@ -154,110 +158,115 @@ export const About: React.FC = () => {
                 <span className="text-purple-400 font-semibold">C • Python • SQL</span>
               </div>
             </div>
-          </div>
-        </div>
+          </TiltCard>
+        </ScrollReveal>
 
         {/* Right Column: Verbatim Bio & Interactive Indicators */}
         <div className="lg:col-span-7 space-y-6">
           {/* Holographic Bio Card */}
-          <div className="glass-panel p-6 sm:p-8 rounded-2xl border border-[var(--border-subtle)] space-y-4">
-            <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
-              <div className="flex items-center gap-2 text-xs font-mono text-cyan-400">
-                <ShieldCheck className="w-4 h-4 text-cyan-400" />
-                <span>EXECUTIVE BIOGRAPHY // VERIFIED DOSSIER</span>
-              </div>
-              <span className="text-[10px] font-mono text-[var(--text-muted)] bg-[var(--chip-bg)] px-2 py-0.5 rounded border border-[var(--border-subtle)]">
-                B.TECH ENTC
-              </span>
-            </div>
-
-            <p className="text-base sm:text-lg text-[var(--text-secondary)] leading-relaxed font-mono">
-              "{PERSONAL_INFO.bio}"
-            </p>
-
-            <div className="pt-2 flex flex-wrap gap-2 text-xs font-mono">
-              {PERSONAL_INFO.interests.map((interest) => (
-                <span
-                  key={interest}
-                  className="px-2.5 py-1 rounded-md bg-[var(--chip-bg)] border border-[var(--chip-border)] text-cyan-400 font-medium"
-                >
-                  #{interest}
+          <ScrollReveal direction="up" delay={0.15}>
+            <div className="glass-panel p-6 sm:p-8 rounded-2xl border border-[var(--border-subtle)] space-y-4">
+              <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
+                <div className="flex items-center gap-2 text-xs font-mono text-cyan-400">
+                  <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                  <span>EXECUTIVE BIOGRAPHY // VERIFIED DOSSIER</span>
+                </div>
+                <span className="text-[10px] font-mono text-[var(--text-muted)] bg-[var(--chip-bg)] px-2 py-0.5 rounded border border-[var(--border-subtle)]">
+                  B.TECH ENTC
                 </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Engineering-style Visual Indicators */}
-          <div className="glass-panel p-6 rounded-2xl border border-[var(--border-subtle)] space-y-5">
-            <div className="flex items-center justify-between">
-              <div className="text-xs font-mono text-[var(--text-secondary)] flex items-center gap-2">
-                <Radio className="w-4 h-4 text-cyan-400" />
-                <span className="font-semibold text-[var(--text-primary)]">ENGINEERING DOMAIN TELEMETRY</span>
               </div>
-              <span className="text-[10px] font-mono text-cyan-400 font-semibold">
-                CLICK TO INSPECT ARCHITECTURE
-              </span>
-            </div>
 
-            {/* Interactive Domain Pill Selector */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-              {indicators.map((ind) => {
-                const isSelected = activeIndicator === ind.id;
-                return (
-                  <button
-                    key={ind.id}
-                    id={`indicator-btn-${ind.id}`}
-                    onClick={() => {
-                      soundFx.playClick();
-                      setActiveIndicator(ind.id);
-                    }}
-                    onMouseEnter={() => soundFx.playHover()}
-                    className={`p-2.5 rounded-xl border text-left font-mono transition-all duration-200 cursor-pointer ${
-                      isSelected
-                        ? 'bg-[var(--chip-bg)] border-[var(--border-primary)] shadow-sm font-semibold'
-                        : 'glass-panel border-[var(--border-subtle)] hover:border-[var(--border-highlight)]'
-                    }`}
+              <p className="text-base sm:text-lg text-[var(--text-secondary)] leading-relaxed font-mono">
+                "{PERSONAL_INFO.bio}"
+              </p>
+
+              <div className="pt-2 flex flex-wrap gap-2 text-xs font-mono">
+                {PERSONAL_INFO.interests.map((interest) => (
+                  <span
+                    key={interest}
+                    className="px-2.5 py-1 rounded-md bg-[var(--chip-bg)] border border-[var(--chip-border)] text-cyan-400 font-medium"
                   >
-                    <div className="flex items-center justify-between mb-1.5">
-                      {ind.icon}
-                      <span className="text-[10px] text-[var(--text-muted)] font-bold">{ind.level}%</span>
-                    </div>
-                    <div className="text-xs font-semibold text-[var(--text-primary)] truncate">{ind.name}</div>
-                    <div className="text-[9px] text-[var(--text-muted)] truncate">{ind.status}</div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Active Indicator Detail Card */}
-            <div className="p-4 rounded-xl bg-[var(--bg-panel-solid)] border border-[var(--border-primary)] space-y-3 font-mono shadow-sm">
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-cyan-400 font-bold flex items-center gap-1.5">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                  {selectedInd.name} Subsystem Breakdown
-                </span>
-                <span className="text-[var(--text-muted)] text-[11px]">{selectedInd.metric}</span>
-              </div>
-
-              {/* Progress Level Bar */}
-              <div className="w-full bg-[var(--bg-secondary)] rounded-full h-2 overflow-hidden border border-[var(--border-subtle)]">
-                <div
-                  className="h-full bg-gradient-to-r from-cyan-400 to-sky-500 rounded-full transition-all duration-500 shadow-sm"
-                  style={{ width: `${selectedInd.level}%` }}
-                />
-              </div>
-
-              {/* Spec Bullet Points */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-xs text-[var(--text-secondary)]">
-                {selectedInd.specs.map((spec, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
-                    <span>{spec}</span>
-                  </div>
+                    #{interest}
+                  </span>
                 ))}
               </div>
             </div>
-          </div>
+          </ScrollReveal>
+
+          {/* Engineering-style Visual Indicators */}
+          <ScrollReveal direction="up" delay={0.25}>
+            <div className="glass-panel p-6 rounded-2xl border border-[var(--border-subtle)] space-y-5">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-mono text-[var(--text-secondary)] flex items-center gap-2">
+                  <Radio className="w-4 h-4 text-cyan-400" />
+                  <span className="font-semibold text-[var(--text-primary)]">ENGINEERING DOMAIN TELEMETRY</span>
+                </div>
+                <span className="text-[10px] font-mono text-cyan-400 font-semibold">
+                  CLICK TO INSPECT ARCHITECTURE
+                </span>
+              </div>
+
+              {/* Interactive Domain Pill Selector */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                {indicators.map((ind) => {
+                  const isSelected = activeIndicator === ind.id;
+                  return (
+                    <button
+                      key={ind.id}
+                      id={`indicator-btn-${ind.id}`}
+                      data-magnetic="true"
+                      onClick={() => {
+                        soundFx.playClick();
+                        setActiveIndicator(ind.id);
+                      }}
+                      onMouseEnter={() => soundFx.playHover()}
+                      className={`p-2.5 rounded-xl border text-left font-mono transition-all duration-200 cursor-pointer ${
+                        isSelected
+                          ? 'bg-[var(--chip-bg)] border-[var(--border-primary)] shadow-sm font-semibold'
+                          : 'glass-panel border-[var(--border-subtle)] hover:border-[var(--border-highlight)]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        {ind.icon}
+                        <span className="text-[10px] text-[var(--text-muted)] font-bold">{ind.level}%</span>
+                      </div>
+                      <div className="text-xs font-semibold text-[var(--text-primary)] truncate">{ind.name}</div>
+                      <div className="text-[9px] text-[var(--text-muted)] truncate">{ind.status}</div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Active Indicator Detail Card */}
+              <div className="p-4 rounded-xl bg-[var(--bg-panel-solid)] border border-[var(--border-primary)] space-y-3 font-mono shadow-sm">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-cyan-400 font-bold flex items-center gap-1.5">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                    {selectedInd.name} Subsystem Breakdown
+                  </span>
+                  <span className="text-[var(--text-muted)] text-[11px]">{selectedInd.metric}</span>
+                </div>
+
+                {/* Progress Level Bar */}
+                <div className="w-full bg-[var(--bg-secondary)] rounded-full h-2 overflow-hidden border border-[var(--border-subtle)]">
+                  <div
+                    className="h-full bg-gradient-to-r from-cyan-400 to-sky-500 rounded-full transition-all duration-500 shadow-sm"
+                    style={{ width: `${selectedInd.level}%` }}
+                  />
+                </div>
+
+                {/* Spec Bullet Points */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-xs text-[var(--text-secondary)]">
+                  {selectedInd.specs.map((spec, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
+                      <span>{spec}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </ScrollReveal>
         </div>
       </div>
     </section>

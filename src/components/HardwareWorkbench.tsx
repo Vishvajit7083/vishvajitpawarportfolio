@@ -17,6 +17,8 @@ import {
   Compass,
 } from 'lucide-react';
 import { soundFx } from '../utils/audio';
+import { ScrollReveal } from './ScrollReveal';
+import { TiltCard } from './TiltCard';
 
 type WorkbenchTab = 'freertos' | 'kinematics' | 'oscilloscope';
 
@@ -230,42 +232,46 @@ export const HardwareWorkbench: React.FC = () => {
   return (
     <section id="hardware-workbench" className="relative w-full py-16 px-4 sm:px-8 max-w-7xl mx-auto z-20">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
-            <Cpu className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs font-mono text-cyan-400 tracking-widest uppercase">
-              // INTERACTIVE_ENGINEERING_LAB
+      <ScrollReveal direction="up">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+              <Cpu className="w-5 h-5" />
             </div>
-            <h2 className="text-3xl sm:text-4xl font-bold font-display text-[var(--text-primary)] tracking-wide">
-              HARDWARE & ARCHITECTURE WORKBENCH
-            </h2>
+            <div>
+              <div className="text-xs font-mono text-cyan-400 tracking-widest uppercase">
+                // INTERACTIVE_ENGINEERING_LAB
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-bold font-display text-[var(--text-primary)] tracking-wide">
+                HARDWARE & ARCHITECTURE WORKBENCH
+              </h2>
+            </div>
+          </div>
+
+          {/* Global Controls */}
+          <div className="flex items-center gap-2">
+            <button
+              data-magnetic="true"
+              onClick={() => {
+                soundFx.playClick();
+                setIsRunning(!isRunning);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer ${
+                isRunning
+                  ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+                  : 'bg-amber-950/80 border-amber-500/60 text-amber-300'
+              }`}
+            >
+              {isRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+              <span>{isRunning ? 'SIMULATION LIVE' : 'PAUSED'}</span>
+            </button>
           </div>
         </div>
-
-        {/* Global Controls */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              soundFx.playClick();
-              setIsRunning(!isRunning);
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer ${
-              isRunning
-                ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
-                : 'bg-amber-950/80 border-amber-500/60 text-amber-300'
-            }`}
-          >
-            {isRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-            <span>{isRunning ? 'SIMULATION LIVE' : 'PAUSED'}</span>
-          </button>
-        </div>
-      </div>
+      </ScrollReveal>
 
       {/* Main Glass Workbench Container */}
-      <div className="glass-panel p-6 sm:p-8 rounded-2xl border border-[var(--border-primary)] shadow-[var(--shadow-panel)] relative overflow-hidden">
+      <ScrollReveal direction="up" delay={0.15}>
+        <div className="glass-panel p-6 sm:p-8 rounded-2xl border border-[var(--border-primary)] shadow-[var(--shadow-panel)] relative overflow-hidden">
         <div className="cyber-corner-tl" />
         <div className="cyber-corner-tr" />
         <div className="cyber-corner-bl" />
@@ -732,6 +738,7 @@ export const HardwareWorkbench: React.FC = () => {
           </div>
         )}
       </div>
-    </section>
+    </ScrollReveal>
+  </section>
   );
 };

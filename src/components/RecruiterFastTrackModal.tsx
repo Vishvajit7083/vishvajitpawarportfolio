@@ -93,7 +93,7 @@ export const RecruiterFastTrackModal: React.FC<RecruiterFastTrackModalProps> = (
 
             <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
               <span className="text-[10px] text-slate-400 block">DEGREE & HONORS</span>
-              <span className="text-sm font-bold text-emerald-400 block">B.Tech E&TC (8.78)</span>
+              <span className="text-sm font-bold text-emerald-400 block">B.Tech E&TC (6.5 / 10)</span>
               <span className="text-[10px] text-slate-500">Bharati Vidyapeeth Kolhapur</span>
             </div>
 

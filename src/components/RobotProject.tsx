@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import {
   Bot,
@@ -14,303 +14,154 @@ import {
   Zap,
   Activity,
   Sliders,
-  Upload,
-  Download,
-  Layers,
   RotateCcw,
   RotateCw,
+  Layers,
+  Terminal,
+  Code2,
+  SlidersHorizontal,
+  Target,
   ShieldCheck,
   Compass,
   Maximize2,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  Square,
+  Volume2,
+  BatteryCharging,
   Gauge,
-  SlidersHorizontal,
-  Target,
-  Sparkle
+  HelpCircle,
+  Camera,
+  Info,
+  Flame
 } from 'lucide-react';
 import { sound } from '../utils/audioEffects';
 import { voiceAssistant, VoiceCommandEventDetail } from '../utils/voiceAssistant';
 import {
-  createIndustrialRobot,
-  IndustrialRobotInstance,
-  RobotFinish,
-  loadGLTFRobotModel,
-  InteractiveZoneData
-} from '../utils/industrialRobotModel';
-import { RobotHUDOverlay } from './RobotHUDOverlay';
+  createWheeledRobot,
+  WheeledRobotInstance,
+  WheeledRobotFinish,
+  WHEELED_ROBOT_COMPONENTS,
+  InteractiveComponentInfo
+} from '../utils/wheeledRobotModel';
 import { createLaboratoryEnvironment } from '../utils/labEnvironment';
 import { useTheme } from '../context/ThemeContext';
+import { ScrollReveal } from './ScrollReveal';
+import { TiltCard } from './TiltCard';
 
-interface HotspotInfo {
-  id: string;
-  name: string;
-  category: 'SENSOR' | 'SERVO' | 'ACTUATOR' | 'CORE';
-  title: string;
-  subtitle: string;
-  description: string;
-  icon: React.ReactNode;
-  specs: string[];
-  cameraTarget: { x: number; y: number; z: number; lookAtY: number };
-  color: string;
-  telemetry: { label: string; value: string }[];
-  jointRef?: string;
-  voltage?: string;
-}
-
-const HOTSPOTS: HotspotInfo[] = [
+const TECH_CARDS = [
   {
-    id: 'vision',
-    name: 'OpenCV Vision Lenses',
-    category: 'SENSOR',
-    title: 'OPENCV STEREOSCOPIC VISION SENSORS',
-    subtitle: 'Dual Sony IMX High-Speed Image Sensors @ 30 FPS',
+    id: 'freertos',
+    name: 'Dual-Core FreeRTOS SMP',
+    category: 'EMBEDDED KERNEL',
     description:
-      'Industrial dual-camera stereoscopic optical sensor pod with multi-coated glass lenses and real-time OpenCV matrix acceleration. Delivers 6D pose estimation, Haar Cascade face detection, and geometric edge contour classification for autonomous object interaction.',
-    icon: <Eye className="w-5 h-5 text-rose-400" />,
-    specs: [
-      'Dual stereoscopic Sony IMX optical lenses with anti-reflective coating',
-      'Real-time Haar Cascade & MobileNet SSD object detection at 30 FPS',
-      'Integrated 532nm precision targeting optical laser rangefinder',
-      'Dynamic lighting compensation & automated exposure normalization',
-    ],
-    cameraTarget: { x: 0, y: 0.6, z: 2.8, lookAtY: 0.5 },
-    color: '#ef4444',
-    voltage: '3.3V / 5.0V I2C/CSI',
-    telemetry: [
-      { label: 'FRAME RATE', value: '30.4 FPS' },
-      { label: 'CLASSIFIER CONF', value: '98.8%' },
-      { label: 'FOCAL LENGTH', value: '3.6mm f/1.8' },
-    ],
+      'Deterministic real-time multitasking kernel. Core 0 manages sensor acquisition & telemetry while Core 1 executes 1kHz motor PWM PID loops.',
+    icon: <Cpu className="w-5 h-5 text-cyan-400" />,
+    tags: ['1 kHz Motor Loop', 'Dual-Core SMP', 'Deterministic'],
+    color: 'from-cyan-500/20 to-cyan-500/5',
+    border: 'border-cyan-500/30 hover:border-cyan-400',
   },
   {
-    id: 'lidar',
-    name: '360° LiDAR Scanner',
-    category: 'SENSOR',
-    title: '360° TIME-OF-FLIGHT LIDAR TURRET',
-    subtitle: 'High-Speed Point-Cloud Spatial Profiling @ 360 RPM',
+    id: 'opencv',
+    name: 'OpenCV & Computer Vision',
+    category: 'AI & PERCEPTION',
     description:
-      'Continuous rotary Time-of-Flight LiDAR scanner spinning at 360 RPM with pulsed laser diodes. Constructs real-time 360° point-cloud depth maps up to 12 meters to detect dynamic obstacles and compute SLAM navigation trajectories.',
-    icon: <Radio className="w-5 h-5 text-rose-500" />,
-    specs: [
-      'Continuous high-speed 360° rotary LiDAR scanner @ 360 RPM',
-      'ToF pulsed laser diode with 12m detection radius (1mm resolution)',
-      'Real-time 2D/3D SLAM spatial map reconstruction pipeline',
-      'Direct DMA UART interface with FreeRTOS kernel scheduler',
-    ],
-    cameraTarget: { x: 0, y: 0.8, z: 2.9, lookAtY: 0.7 },
-    color: '#f43f5e',
-    voltage: '5.0V DC / UART',
-    telemetry: [
-      { label: 'LIDAR SPEED', value: '360 RPM' },
-      { label: 'SAMPLE RATE', value: '4,000 pts/s' },
-      { label: 'RANGE RADIUS', value: '12.0 METERS' },
-    ],
+      'Raspberry Pi vision pipeline executing Haar Cascade facial tracking, color segmentation, and visual obstacle mapping at 30 FPS.',
+    icon: <Eye className="w-5 h-5 text-emerald-400" />,
+    tags: ['30 FPS Pipeline', 'Object Tracking', 'Haar Cascades'],
+    color: 'from-emerald-500/20 to-emerald-500/5',
+    border: 'border-emerald-500/30 hover:border-emerald-400',
   },
   {
-    id: 'ultrasonic',
-    name: 'HC-SR04 Ultrasonic Radar',
-    category: 'SENSOR',
-    title: 'BROW DUAL HC-SR04 ULTRASONIC ARRAY',
-    subtitle: '40kHz Acoustic Pulse Proximity Profiler',
+    id: 'sonar',
+    name: '40kHz Ultrasonic Sonar',
+    category: 'SENSING & RADAR',
     description:
-      'Dual ultrasonic transducer pair mounted in the sensor head brow emitting 40kHz sonic waves. Provides deterministic obstacle proximity readings from 2cm to 400cm to trigger emergency deceleration safety loops.',
-    icon: <Waves className="w-5 h-5 text-cyan-400" />,
-    specs: [
-      'Dual HC-SR04 ultrasonic transducer pair in brow unit',
-      'Deterministic 2cm – 400cm range profiling with 3mm precision',
-      'Real-time echo time-to-distance conversion on FreeRTOS hardware timer',
-      'Dynamic deceleration & emergency hardware stop safety loop',
-    ],
-    cameraTarget: { x: 0, y: 0.5, z: 2.9, lookAtY: 0.4 },
-    color: '#00f0ff',
-    voltage: '5.0V DC / GPIO',
-    telemetry: [
-      { label: 'PULSE FREQ', value: '40.0 kHz' },
-      { label: 'PRECISION', value: '± 3.0 mm' },
-      { label: 'SAFETY ZONE', value: '30 cm BUFFER' },
-    ],
+      'Microsecond time-of-flight acoustic ranging algorithm with SG90 servo 180° spatial radar sweep for collision prevention.',
+    icon: <Radio className="w-5 h-5 text-purple-400" />,
+    tags: ['40 kHz Ultrasound', '±3mm Accuracy', '180° Sweep'],
+    color: 'from-purple-500/20 to-purple-500/5',
+    border: 'border-purple-500/30 hover:border-purple-400',
   },
   {
-    id: 'servo_shoulder',
-    name: 'Shoulder Servo (J2)',
-    category: 'SERVO',
-    title: 'HARMONIC DRIVE SHOULDER SERVO ACTUATOR',
-    subtitle: 'Joint 2 • Zero-Backlash High-Torque Brushless Motor',
+    id: 'hbridge',
+    name: 'Dual H-Bridge Motor Control',
+    category: 'POWER & ACTUATION',
     description:
-      'High-torque industrial brushless DC servo motor paired with a 100:1 zero-backlash harmonic drive reduction gearbox and magnetic quadrature optical encoder for sub-millimeter positional repeatability.',
+      'L298N high-current driver with hardware PWM speed regulation, regenerative braking, and differential skid-steering kinematics.',
     icon: <Zap className="w-5 h-5 text-amber-400" />,
-    specs: [
-      'Zero-backlash strain-wave harmonic reduction gearbox (100:1 ratio)',
-      'Integrated 14-bit magnetic absolute position encoder',
-      'Dynamic PID current loop with regenerative braking resistor',
-      'Machined aluminum-alloy heat dissipation fins & copper bushings',
-    ],
-    cameraTarget: { x: 0.4, y: -0.1, z: 2.7, lookAtY: -0.2 },
-    color: '#f59e0b',
-    jointRef: 'Joint 2 (Shoulder Pitch)',
-    voltage: '24V DC / 8.5A Peak',
-    telemetry: [
-      { label: 'PEAK TORQUE', value: '42.0 Nm' },
-      { label: 'POSITION ENC', value: '14-BIT ABS' },
-      { label: 'MOTOR TEMP', value: '38.4 °C' },
-    ],
+    tags: ['PWM Modulation', 'Skid Steering', '2A Peak Rail'],
+    color: 'from-amber-500/20 to-amber-500/5',
+    border: 'border-amber-500/30 hover:border-amber-400',
   },
   {
-    id: 'servo_elbow',
-    name: 'Elbow Servo (J3)',
-    category: 'SERVO',
-    title: 'HIGH-SPEED BRUSHLESS ELBOW SERVO ACTUATOR',
-    subtitle: 'Joint 3 • Direct Rotary Servo with Thermal Sink',
+    id: 'iot_telemetry',
+    name: 'IoT & Telemetry Stack',
+    category: 'CONNECTIVITY',
     description:
-      'Precision brushless servo motor controlling the forearm articulation. Features high-speed velocity profiles, integrated thermistor feedback, and dual angular contact ball bearings.',
-    icon: <Cpu className="w-5 h-5 text-amber-300" />,
-    specs: [
-      'High-speed BLDC rotary servo motor with planetary gearing',
-      'Internal NTC thermistor thermal protection monitoring',
-      'Digital CAN-Bus velocity/position servo feedback loop',
-      'Hardened steel output shaft with sealed needle bearings',
-    ],
-    cameraTarget: { x: 0.3, y: 0.5, z: 2.8, lookAtY: 0.4 },
-    color: '#fbbf24',
-    jointRef: 'Joint 3 (Elbow Flex)',
-    voltage: '24V DC / 6.0A Peak',
-    telemetry: [
-      { label: 'OUTPUT TORQUE', value: '28.5 Nm' },
-      { label: 'SERVO LOOP', value: '1,000 Hz' },
-      { label: 'BACKLASH', value: '< 1.2 arcmin' },
-    ],
+      'Bidirectional WebSocket & MQTT telemetry streams broadcasting real-time wheel RPM, sonar distance, and battery health to remote web dashboards.',
+    icon: <Waves className="w-5 h-5 text-sky-400" />,
+    tags: ['MQTT Pub/Sub', 'WebSockets', 'Low-Latency Bus'],
+    color: 'from-sky-500/20 to-sky-500/5',
+    border: 'border-sky-500/30 hover:border-sky-400',
   },
   {
-    id: 'hydraulic',
-    name: 'Hydraulic Balance Piston',
-    category: 'ACTUATOR',
-    title: 'DUAL-ACTING HYDRAULIC COUNTERBALANCE PISTON',
-    subtitle: 'Chrome-Plated Fluid Damper & Gravity Compensation',
+    id: 'embedded_c',
+    name: 'Bare-Metal C / C++ Firmware',
+    category: 'LOW-LEVEL FIRMWARE',
     description:
-      'High-pressure fluid-damped hydraulic counterbalance piston engineered to offset payload gravitational torque on the bicep boom arm, reducing motor current draw by up to 65% during heavy manipulation.',
-    icon: <Activity className="w-5 h-5 text-cyan-300" />,
-    specs: [
-      'Mirror-finish hard chrome plated high-tensile cylinder rod',
-      'CNC-machined anodized aluminum fluid reservoir casing',
-      'Dual polyurethane high-pressure seals rated to 150 bar',
-      'Passive mechanical gravity compensation geometry',
-    ],
-    cameraTarget: { x: 0.3, y: 0.2, z: 2.6, lookAtY: 0.1 },
-    color: '#38bdf8',
-    voltage: 'Hydraulic Passive / Pressure Monitored',
-    telemetry: [
-      { label: 'PRESSURE', value: '120 BAR' },
-      { label: 'STROKE LENGTH', value: '140 mm' },
-      { label: 'LOAD OFFSET', value: '65% DAMPING' },
-    ],
-  },
-  {
-    id: 'gripper',
-    name: 'Bionic Gripper & Laser',
-    category: 'ACTUATOR',
-    title: 'END-EFFECTOR BIONIC PARALLEL GRIPPER',
-    subtitle: 'Carbon-Reinforced Jaws with Laser Diode Guide',
-    description:
-      'Dual-finger parallel servo gripper with carbon-fiber textured contact pads and integrated 532nm targeting laser beam. Equipped with tactile force feedback strain gauges to securely grasp fragile items without slippage.',
-    icon: <Crosshair className="w-5 h-5 text-emerald-400" />,
-    specs: [
-      'Dual parallel moving jaw fingers with carbon fiber friction pads',
-      'Miniature coreless servo actuator with lead screw drive mechanism',
-      '532nm cyan laser targeting pointer for visual coordinate calibration',
-      'Integrated tactile strain gauge force sensor (0.1N – 25N)',
-    ],
-    cameraTarget: { x: 0, y: 1.1, z: 2.8, lookAtY: 1.0 },
-    color: '#10b981',
-    voltage: '12V DC / PWM',
-    telemetry: [
-      { label: 'CLAMP FORCE', value: '18.5 N' },
-      { label: 'JAW STROKE', value: '0 – 80 mm' },
-      { label: 'LASER STATUS', value: 'ACTIVE (532nm)' },
-    ],
-  },
-  {
-    id: 'freertos_core',
-    name: 'FreeRTOS Master ECU',
-    category: 'CORE',
-    title: 'EMBEDDED FREERTOS INDUSTRIAL MASTER ECU',
-    subtitle: '32-Bit Dual-Core Controller & CAN-Bus Hub',
-    description:
-      'Central industrial microcontroller running deterministic FreeRTOS kernels. Handles multi-threaded sensor acquisition, Forward/Inverse Kinematics (FK/IK) calculations, hardware watchdog timers, and CAN-Bus actuator communication.',
-    icon: <Cpu className="w-5 h-5 text-purple-400" />,
-    specs: [
-      'FreeRTOS v10.4 deterministic pre-emptive multi-tasking kernel',
-      'High-speed ISO 11898 CAN-Bus transceiver network (1 Mbps)',
-      'Deterministic 10ms cycle safety watchdog timer interrupts',
-      '6-DOF Forward & Inverse Kinematics matrix algebraic solver',
-    ],
-    cameraTarget: { x: 0, y: -0.4, z: 2.9, lookAtY: -0.5 },
-    color: '#c084fc',
-    voltage: '24V Input / 5V & 3.3V Regulated',
-    telemetry: [
-      { label: 'RTOS KERNEL', value: 'FreeRTOS v10.4' },
-      { label: 'CYCLE LOAD', value: '22% CPU' },
-      { label: 'CAN-BUS BAUD', value: '1.0 Mbps' },
-    ],
+      'Direct register-level timer interrupts, hardware input capture for echo pulse width calculation, and DMA memory access.',
+    icon: <Terminal className="w-5 h-5 text-rose-400" />,
+    tags: ['Hardware Timers', '<5µs ISR', 'HAL Drivers'],
+    color: 'from-rose-500/20 to-rose-500/5',
+    border: 'border-rose-500/30 hover:border-rose-400',
   },
 ];
 
 export const RobotProject: React.FC = () => {
-  const { theme, themeConfig } = useTheme();
+  const { themeConfig } = useTheme();
   const canvasContainerRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [activeHotspotId, setActiveHotspotId] = useState<string>('vision');
-  const [selectedFinish, setSelectedFinish] = useState<RobotFinish>('industrial_orange');
-  const [filterCategory, setFilterCategory] = useState<'ALL' | 'SENSOR' | 'SERVO' | 'ACTUATOR' | 'CORE'>('ALL');
-  const [controlMode, setControlMode] = useState<'autonomous' | 'manual'>('autonomous');
-  const [laserActive, setLaserActive] = useState<boolean>(true);
-  const [isSimulatingVision, setIsSimulatingVision] = useState(false);
-  const [simulatedLog, setSimulatedLog] = useState<string>(
-    'ROS2 / FreeRTOS Industrial Robotic Cell online. PBR shaders compiled. Click any 3D part to inspect.'
-  );
-  const [obstacleDistance, setObstacleDistance] = useState(48);
-  const [isExporting, setIsExporting] = useState(false);
+  // Active Selected Component for Deep-Dive Inspection
+  const [activeComponentId, setActiveComponentId] = useState<string>('ultrasonic_sensor');
+  const [selectedFinish, setSelectedFinish] = useState<WheeledRobotFinish>('authentic_lab');
+  const [activeDriveCommand, setActiveDriveCommand] = useState<'forward' | 'backward' | 'left' | 'right' | 'spin' | 'stop'>('stop');
+  const [throttleSpeed, setThrottleSpeed] = useState<number>(75); // 0 to 100%
+  const [obstacleDistance, setObstacleDistance] = useState<number>(48); // 5 to 200 cm
+  const [isScanning, setIsScanning] = useState<boolean>(true);
+  const [selectedExpression, setSelectedExpression] = useState<'listening' | 'scanning' | 'excited' | 'alert' | 'idle'>('listening');
+  const [isAutoRotating, setIsAutoRotating] = useState<boolean>(false);
+  const [isExplodedView, setIsExplodedView] = useState<boolean>(false);
   const [hoveredPartName, setHoveredPartName] = useState<string | null>(null);
-  const [isEngaged, setIsEngaged] = useState<boolean>(true);
-  const [robotRotation, setRobotRotation] = useState({ x: 0, y: 0 });
-  const engagementTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isSimulatingDiagnostic, setIsSimulatingDiagnostic] = useState<boolean>(false);
+  const [diagnosticLog, setDiagnosticLog] = useState<string>(
+    'Wheeled Robot Telemetry online. Click 3D parts or drive controls to interact.'
+  );
 
-  const triggerEngagement = () => {
-    setIsEngaged(true);
-    if (engagementTimerRef.current) {
-      clearTimeout(engagementTimerRef.current);
-    }
-    engagementTimerRef.current = setTimeout(() => {
-      setIsEngaged(false);
-    }, 4000);
-  };
+  // Voice Interaction
+  const [isVoiceListening, setIsVoiceListening] = useState<boolean>(false);
+  const [voiceTranscript, setVoiceTranscript] = useState<string>('');
 
-  // Manual Kinematics Joint Angles (radians / normalized)
-  const [manualJoints, setManualJoints] = useState({
-    waist: 0,
-    shoulder: -0.2,
-    elbow: 0.4,
-    wristPitch: 0,
-    gripperOpen: 0.3,
-  });
-
-  // Voice Command & 3D Feature States ('Rotate', 'Exploded View', 'Reset')
-  const [isAutoRotating, setIsAutoRotating] = useState(false);
-  const [isExplodedView, setIsExplodedView] = useState(false);
-  const [isVoiceListening, setIsVoiceListening] = useState(false);
-  const [voiceTranscript, setVoiceTranscript] = useState('');
-
+  // 3D Engine & Animation Refs
   const isAutoRotatingRef = useRef(false);
   const isExplodedViewRef = useRef(false);
   const explodeProgressRef = useRef(0);
   const robotGroupRef = useRef<THREE.Group | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const robotInstanceRef = useRef<WheeledRobotInstance | null>(null);
+  const targetCameraPosRef = useRef<{ x: number; y: number; z: number; lookAtY: number }>({
+    x: 0,
+    y: 0.5,
+    z: 3.2,
+    lookAtY: 0.2,
+  });
 
-  const activeHotspot = HOTSPOTS.find((h) => h.id === activeHotspotId) || HOTSPOTS[0];
+  const activeComponent =
+    WHEELED_ROBOT_COMPONENTS.find((c) => c.id === activeComponentId) || WHEELED_ROBOT_COMPONENTS[0];
 
-  // Ref to hold the active robot instance
-  const robotInstanceRef = useRef<IndustrialRobotInstance | null>(null);
-
-  // Sync refs with states
+  // Sync state refs
   useEffect(() => {
     isAutoRotatingRef.current = isAutoRotating;
   }, [isAutoRotating]);
@@ -319,6 +170,78 @@ export const RobotProject: React.FC = () => {
     isExplodedViewRef.current = isExplodedView;
   }, [isExplodedView]);
 
+  // Handle Drive Commands
+  const handleDrive = useCallback(
+    (cmd: 'forward' | 'backward' | 'left' | 'right' | 'spin' | 'stop') => {
+      sound.playClick();
+      setActiveDriveCommand(cmd);
+
+      if (robotInstanceRef.current) {
+        robotInstanceRef.current.setDriveCommand(cmd, throttleSpeed);
+      }
+
+      if (cmd === 'forward') {
+        sound.playBootBeep(520, 0.08);
+        setDiagnosticLog(`MOTOR DRIVE: [FORWARD ${throttleSpeed}% PWM] • Dual H-Bridge Active`);
+      } else if (cmd === 'backward') {
+        sound.playBootBeep(440, 0.08);
+        setDiagnosticLog(`MOTOR DRIVE: [REVERSE ${throttleSpeed}% PWM] • Dual H-Bridge Inverted`);
+      } else if (cmd === 'left') {
+        sound.playBootBeep(660, 0.06);
+        setDiagnosticLog('STEERING: [SKID-TURN LEFT] • Differential Gearbox Bias');
+      } else if (cmd === 'right') {
+        sound.playBootBeep(660, 0.06);
+        setDiagnosticLog('STEERING: [SKID-TURN RIGHT] • Differential Gearbox Bias');
+      } else if (cmd === 'spin') {
+        sound.playLaserScan();
+        setDiagnosticLog('DYNAMIC MANEUVER: [360° ZERO-RADIUS PIVOT SPIN]');
+      } else {
+        setDiagnosticLog('BRAKING: [MOTOR HALT] • Regenerative Damping Engaged');
+      }
+    },
+    [throttleSpeed]
+  );
+
+  // Keyboard navigation for driving the robot directly in the 3D lab
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Avoid intercepting inputs if user is typing in a textarea or modal
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+        e.preventDefault();
+        handleDrive('forward');
+      } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        handleDrive('backward');
+      } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+        e.preventDefault();
+        handleDrive('left');
+      } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+        e.preventDefault();
+        handleDrive('right');
+      } else if (e.key === ' ' || e.key === 'Escape') {
+        e.preventDefault();
+        handleDrive('stop');
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
+        handleDrive('stop');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [handleDrive]);
+
+  // Voice command controls
   const handleToggleVoice = () => {
     sound.playClick();
     if (!voiceAssistant.isSupported()) {
@@ -333,9 +256,8 @@ export const RobotProject: React.FC = () => {
     const nextState = explicitState !== undefined ? explicitState : !isAutoRotatingRef.current;
     setIsAutoRotating(nextState);
     isAutoRotatingRef.current = nextState;
-    const msg = nextState ? '3D model auto-rotation activated.' : '3D model auto-rotation stopped.';
-    setSimulatedLog(`VOICE/MANUAL: [AUTO-ROTATE ${nextState ? 'ON' : 'OFF'}]`);
-    voiceAssistant.speak(msg);
+    setDiagnosticLog(`3D Auto-Rotation: [${nextState ? 'ENGAGED' : 'PAUSED'}]`);
+    voiceAssistant.speak(nextState ? '3D auto-rotation activated.' : 'Auto-rotation stopped.');
   };
 
   const handleToggleExplodedView = (explicitState?: boolean) => {
@@ -343,11 +265,12 @@ export const RobotProject: React.FC = () => {
     const nextState = explicitState !== undefined ? explicitState : !isExplodedViewRef.current;
     setIsExplodedView(nextState);
     isExplodedViewRef.current = nextState;
-    const msg = nextState
-      ? 'Exploded view subsystem disassembly engaged. Internal actuators and sensors separated.'
-      : 'Reassembling robot mechanical components.';
-    setSimulatedLog(`VOICE/MANUAL: [EXPLODED VIEW ${nextState ? 'ENGAGED' : 'COLLAPSED'}]`);
-    voiceAssistant.speak(msg);
+    setDiagnosticLog(`Exploded View Disassembly: [${nextState ? 'ACTIVE' : 'REASSEMBLED'}]`);
+    voiceAssistant.speak(
+      nextState
+        ? 'Exploded view engaged. Display, chassis, wheels, and sensors separated.'
+        : 'Reassembling robot mechanical components.'
+    );
   };
 
   const handleResetModel = () => {
@@ -356,29 +279,41 @@ export const RobotProject: React.FC = () => {
     isAutoRotatingRef.current = false;
     setIsExplodedView(false);
     isExplodedViewRef.current = false;
-    setActiveHotspotId('vision');
-    setManualJoints({
-      waist: 0,
-      shoulder: -0.2,
-      elbow: 0.4,
-      wristPitch: 0,
-      gripperOpen: 0.3,
-    });
+    setActiveDriveCommand('stop');
+    setActiveComponentId('ultrasonic_sensor');
+    targetCameraPosRef.current = { x: 0, y: 0.5, z: 3.2, lookAtY: 0.2 };
+    if (robotInstanceRef.current) {
+      robotInstanceRef.current.setDriveCommand('stop', throttleSpeed);
+      robotInstanceRef.current.updateFaceCanvas('listening', 48);
+    }
     if (robotGroupRef.current) {
       robotGroupRef.current.rotation.set(0, 0, 0);
-      setRobotRotation({ x: 0, y: 0 });
     }
-    setSimulatedLog('SYSTEM RESET: Joints zeroed, camera returned to nominal coordinates.');
-    voiceAssistant.speak('Robot kinematic joints and viewport reset to default home position.');
+    setDiagnosticLog('SYSTEM RESET: Default lab camera & home position restored.');
+    voiceAssistant.speak('Robot chassis reset to home position.');
   };
 
-  const handleVoiceTrigger = (cmd: string) => {
+  // Camera preset viewpoints
+  const handleCameraPreset = (preset: 'overview' | 'sonar' | 'screen' | 'motors' | 'battery') => {
     sound.playClick();
-    setVoiceTranscript(cmd);
-    voiceAssistant.handleFinalTranscript(cmd, 'robot');
+    if (preset === 'overview') {
+      targetCameraPosRef.current = { x: 1.8, y: 1.2, z: 2.8, lookAtY: 0.2 };
+    } else if (preset === 'sonar') {
+      targetCameraPosRef.current = { x: 0, y: 0.2, z: 2.2, lookAtY: 0.15 };
+      setActiveComponentId('ultrasonic_sensor');
+    } else if (preset === 'screen') {
+      targetCameraPosRef.current = { x: 0, y: 0.7, z: 2.0, lookAtY: 0.6 };
+      setActiveComponentId('robot_display');
+    } else if (preset === 'motors') {
+      targetCameraPosRef.current = { x: 1.6, y: 0.1, z: 1.2, lookAtY: -0.05 };
+      setActiveComponentId('gear_motors');
+    } else if (preset === 'battery') {
+      targetCameraPosRef.current = { x: 0, y: 0.6, z: -2.4, lookAtY: 0.3 };
+      setActiveComponentId('battery_pack');
+    }
   };
 
-  // Voice Assistant and Custom Event Listener
+  // Voice event handler
   useEffect(() => {
     const unsubscribe = voiceAssistant.subscribe((state) => {
       setIsVoiceListening(state.isListening);
@@ -390,157 +325,130 @@ export const RobotProject: React.FC = () => {
       const action = customEvent.detail?.action;
       const transcript = (customEvent.detail?.transcript || '').toLowerCase();
 
-      if (action === 'robot_rotate' || transcript.includes('rotate') || transcript.includes('spin')) {
+      if (transcript.includes('forward') || action === 'robot_forward') {
+        handleDrive('forward');
+      } else if (transcript.includes('back') || transcript.includes('reverse')) {
+        handleDrive('backward');
+      } else if (transcript.includes('left')) {
+        handleDrive('left');
+      } else if (transcript.includes('right')) {
+        handleDrive('right');
+      } else if (transcript.includes('stop') || transcript.includes('halt')) {
+        handleDrive('stop');
+      } else if (transcript.includes('spin') || transcript.includes('rotate')) {
         handleToggleRotate();
-      } else if (
-        action === 'robot_explode' ||
-        transcript.includes('explode') ||
-        transcript.includes('exploded') ||
-        transcript.includes('disassemble')
-      ) {
+      } else if (transcript.includes('explode') || transcript.includes('disassemble')) {
         handleToggleExplodedView();
-      } else if (
-        action === 'robot_reset' ||
-        transcript.includes('reset') ||
-        transcript.includes('home position') ||
-        transcript.includes('zero')
-      ) {
+      } else if (transcript.includes('reset') || transcript.includes('home')) {
         handleResetModel();
-      } else if (action === 'robot_laser' || transcript.includes('laser')) {
-        setLaserActive((prev) => !prev);
-        setSimulatedLog('VOICE COMMAND: [LASER BEAM TOGGLED]');
       }
     };
 
     window.addEventListener('portfolio:voice-command', handleVoiceCommandEvent);
-
     return () => {
       unsubscribe();
       window.removeEventListener('portfolio:voice-command', handleVoiceCommandEvent);
     };
-  }, []);
+  }, [handleDrive]);
 
-  // Initialize High-Fidelity 3D Scene with Laboratory Lighting, PBR Materials & Raycasting
+  // Diagnostic Test Runner
+  const runDiagnosticTest = () => {
+    sound.playLaserScan();
+    setIsSimulatingDiagnostic(true);
+    setDiagnosticLog('INITIALIZING 4-WHEEL DIFFERENTIAL DRIVE & SONAR RADAR CALIBRATION...');
+
+    setTimeout(() => {
+      setDiagnosticLog(`HC-SR04 SONAR: 40kHz acoustic echo verified @ ${obstacleDistance}cm. Sweep servo nominal.`);
+      sound.playBootBeep(880, 0.05);
+    }, 600);
+
+    setTimeout(() => {
+      setDiagnosticLog(
+        `RASPBERRY PI & L298N: 4x TT DC motors synchronized @ ${throttleSpeed}% PWM. 7.85V battery rail nominal.`
+      );
+      sound.playSuccessChime();
+      setIsSimulatingDiagnostic(false);
+    }, 1500);
+  };
+
+  // 3D Scene Initialization
   useEffect(() => {
     if (!canvasContainerRef.current) return;
     const container = canvasContainerRef.current;
 
-    // 1. Scene & Atmosphere Fog
+    // 1. Scene & Depth Fog
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x030712, 0.035);
+    scene.fog = new THREE.FogExp2(0x030712, 0.028);
 
-    // 2. Perspective Camera
-    const camera = new THREE.PerspectiveCamera(
-      45,
-      container.clientWidth / container.clientHeight,
-      0.1,
-      100
-    );
-    camera.position.set(0, 0.6, 4.0);
+    // 2. Camera
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+    camera.position.set(0, 0.5, 3.2);
     cameraRef.current = camera;
 
-    // 3. High-Performance WebGL Renderer with ACESFilmic Tone Mapping & Shadows
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    // 3. WebGL Renderer
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance',
+    });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = selectedFinish === 'defense_carbon' ? 1.55 : selectedFinish === 'titanium_stealth' ? 1.5 : 1.35;
+    renderer.toneMappingExposure = selectedFinish === 'defense_carbon' ? 1.6 : 1.4;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
-    // 4. Generate High-Dynamic Range Laboratory Environment Map
+    // 4. Lab Environment Map
     const labEnvTexture = createLaboratoryEnvironment(renderer, {
       theme: 'cyber_lab',
-      rimColor:
-        selectedFinish === 'cyber_lab_white'
-          ? 0x38bdf8
-          : selectedFinish === 'defense_carbon'
-          ? 0x00f0ff
-          : selectedFinish === 'titanium_stealth'
-          ? 0x60a5fa
-          : 0x00f0ff,
+      rimColor: selectedFinish === 'defense_carbon' ? 0xa855f7 : 0x00f0ff,
     });
     scene.environment = labEnvTexture;
 
-    // 5. Multi-Point Engineer's Laboratory Studio Lighting Rig with Dynamic Intensities
-    // Dynamic Lighting Calibration per Finish Theme
-    const isStealth = selectedFinish === 'titanium_stealth';
-    const isCarbon = selectedFinish === 'defense_carbon';
-    const isLabWhite = selectedFinish === 'cyber_lab_white';
-
-    const ambientLight = new THREE.AmbientLight(
-      0x0e1b2e,
-      isLabWhite ? 2.2 : isStealth ? 1.4 : isCarbon ? 1.2 : 1.7
-    );
+    // 5. Studio Lighting Rig
+    const ambientLight = new THREE.AmbientLight(0x0f172a, 1.8);
     scene.add(ambientLight);
 
-    // Key Lab Overhead Spotlight
-    const keySpotlight = new THREE.SpotLight(
-      0xffffff,
-      isCarbon ? 5.8 : isStealth ? 5.4 : isLabWhite ? 4.4 : 5.0,
-      16,
-      Math.PI / 3.8,
-      0.35,
-      1.1
-    );
-    keySpotlight.position.set(2.8, 5.5, 3.2);
+    const keySpotlight = new THREE.SpotLight(0xffffff, 5.2, 18, Math.PI / 3.6, 0.35, 1.0);
+    keySpotlight.position.set(3.0, 5.5, 3.5);
     keySpotlight.castShadow = true;
     keySpotlight.shadow.mapSize.width = 1024;
     keySpotlight.shadow.mapSize.height = 1024;
     keySpotlight.shadow.bias = -0.0001;
     scene.add(keySpotlight);
 
-    // Cyan Engineering Grazing Rim Light
-    const cyanRimLight = new THREE.DirectionalLight(
-      0x00f0ff,
-      isCarbon ? 4.2 : isStealth ? 3.6 : isLabWhite ? 2.2 : 3.0
-    );
+    const cyanRimLight = new THREE.DirectionalLight(0x00f0ff, 3.2);
     cyanRimLight.position.set(-3.5, 2.5, -2.5);
     scene.add(cyanRimLight);
 
-    // Purple Telemetry Fill Light
-    const purpleFillLight = new THREE.PointLight(
-      0xa855f7,
-      isCarbon ? 3.5 : isStealth ? 3.0 : 2.5,
-      12
-    );
-    purpleFillLight.position.set(-2.5, 1.5, 2.0);
-    scene.add(purpleFillLight);
+    const amberFillLight = new THREE.PointLight(0xf59e0b, 2.4, 10);
+    amberFillLight.position.set(2.5, 1.0, -2.0);
+    scene.add(amberFillLight);
 
-    // Warm Accent Diagnostic Spotlight
-    const amberAccentLight = new THREE.PointLight(
-      0xf59e0b,
-      isLabWhite ? 2.8 : 2.2,
-      8
-    );
-    amberAccentLight.position.set(3.0, -0.5, 2.0);
-    scene.add(amberAccentLight);
-
-    // 5. High-Precision Laboratory Floor Grid with Shadows
+    // 6. Grid Ground Plane
     const gridHelper = new THREE.GridHelper(20, 20, 0x00f0ff, 0x1e293b);
-    gridHelper.position.y = -1.5;
-    gridHelper.material.opacity = 0.4;
+    gridHelper.position.y = -0.45;
+    gridHelper.material.opacity = 0.35;
     gridHelper.material.transparent = true;
     scene.add(gridHelper);
 
     const floorShadowPlane = new THREE.Mesh(
       new THREE.PlaneGeometry(16, 16),
-      new THREE.ShadowMaterial({ opacity: 0.5 })
+      new THREE.ShadowMaterial({ opacity: 0.48 })
     );
     floorShadowPlane.rotation.x = -Math.PI / 2;
-    floorShadowPlane.position.y = -1.505;
+    floorShadowPlane.position.y = -0.455;
     floorShadowPlane.receiveShadow = true;
     scene.add(floorShadowPlane);
 
-    // 6. Create CAD-Grade Industrial Autonomous Robot Instance
-    const robotInstance = createIndustrialRobot(1.05, selectedFinish);
+    // 7. Wheeled Robotic Car 3D Model Instance
+    const robotInstance = createWheeledRobot(1.0, selectedFinish);
     robotInstanceRef.current = robotInstance;
     const robotGroup = robotInstance.rootGroup;
     robotGroupRef.current = robotGroup;
     scene.add(robotGroup);
 
-    // Enable shadows across all robot parts
     robotGroup.traverse((node) => {
       if ((node as THREE.Mesh).isMesh) {
         node.castShadow = true;
@@ -548,11 +456,10 @@ export const RobotProject: React.FC = () => {
       }
     });
 
-    // 7. Raycasting for Interactive Clickable Zones on 3D Meshes
+    // 8. Raycasting & Mouse Drag Orbit Controls
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    // Mouse Orbit Drag Controls & Raycast Selection
     let isDragging = false;
     let dragStartX = 0;
     let dragStartY = 0;
@@ -567,16 +474,13 @@ export const RobotProject: React.FC = () => {
       dragStartY = e.clientY;
       prevX = e.clientX;
       prevY = e.clientY;
-      triggerEngagement();
     };
 
     const onMouseMove = (e: MouseEvent) => {
-      triggerEngagement();
       const rect = container.getBoundingClientRect();
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
-      // Hover Raycasting
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(robotInstance.clickableObjects, true);
 
@@ -600,14 +504,12 @@ export const RobotProject: React.FC = () => {
 
       robotGroup.rotation.y += dx * 0.008;
       robotGroup.rotation.x = Math.max(-0.4, Math.min(0.4, robotGroup.rotation.x + dy * 0.004));
-      setRobotRotation({ x: robotGroup.rotation.x, y: robotGroup.rotation.y });
       prevX = e.clientX;
       prevY = e.clientY;
     };
 
     const onMouseUp = (e: MouseEvent) => {
       if (!hasMovedMuch && container.contains(e.target as Node)) {
-        // Treat as direct 3D Component Click
         const rect = container.getBoundingClientRect();
         mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -620,16 +522,26 @@ export const RobotProject: React.FC = () => {
           const compId = hit.userData.componentId;
           if (compId) {
             sound.playClick();
-            setActiveHotspotId(compId);
-            triggerEngagement();
-            setSimulatedLog(`CLICKED 3D ZONE: [${compId.toUpperCase()}] - Focused camera & telemetry.`);
+            setActiveComponentId(compId);
+            const foundComp = WHEELED_ROBOT_COMPONENTS.find((c) => c.id === compId);
+            if (foundComp) {
+              targetCameraPosRef.current = foundComp.cameraTarget;
+            }
+            setDiagnosticLog(`INSPECTING 3D COMPONENT: [${(hit.userData.componentName || compId).toUpperCase()}]`);
           }
         }
       }
       isDragging = false;
     };
 
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY * 0.002;
+      targetCameraPosRef.current.z = Math.max(1.4, Math.min(5.5, targetCameraPosRef.current.z + zoomFactor));
+    };
+
     container.addEventListener('mousedown', onMouseDown);
+    container.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
 
@@ -639,17 +551,14 @@ export const RobotProject: React.FC = () => {
         isDragging = true;
         prevX = e.touches[0].clientX;
         prevY = e.touches[0].clientY;
-        triggerEngagement();
       }
     };
     const onTouchMove = (e: TouchEvent) => {
-      triggerEngagement();
       if (!isDragging || e.touches.length === 0) return;
       const dx = e.touches[0].clientX - prevX;
       const dy = e.touches[0].clientY - prevY;
       robotGroup.rotation.y += dx * 0.008;
       robotGroup.rotation.x = Math.max(-0.4, Math.min(0.4, robotGroup.rotation.x + dy * 0.004));
-      setRobotRotation({ x: robotGroup.rotation.x, y: robotGroup.rotation.y });
       prevX = e.touches[0].clientX;
       prevY = e.touches[0].clientY;
     };
@@ -670,54 +579,50 @@ export const RobotProject: React.FC = () => {
     };
     window.addEventListener('resize', handleResize);
 
-    // 8. Master Animation Loop with Smooth Subsystem Camera Zoom
+    // 9. Master Animation Loop
     let clock = new THREE.Clock();
     let animId: number;
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
+      const delta = clock.getDelta();
       const elapsedTime = clock.getElapsedTime();
 
-      // Camera Smooth Interpolation towards Active Clicked Subsystem
-      const targetPos = activeHotspot.cameraTarget;
-      camera.position.x += (targetPos.x - camera.position.x) * 0.04;
-      camera.position.y += (targetPos.y - camera.position.y) * 0.04;
-      camera.position.z += (targetPos.z - camera.position.z) * 0.04;
+      // Camera Smooth Interpolation
+      const targetPos = targetCameraPosRef.current;
+      camera.position.x += (targetPos.x - camera.position.x) * 0.06;
+      camera.position.y += (targetPos.y - camera.position.y) * 0.06;
+      camera.position.z += (targetPos.z - camera.position.z) * 0.06;
       camera.lookAt(0, targetPos.lookAtY, 0);
 
-      // Auto-Rotation when triggered via voice or toggle
+      // Auto-Rotation
       if (isAutoRotatingRef.current && !isDragging) {
-        robotGroup.rotation.y += 0.012;
-        setRobotRotation({ x: robotGroup.rotation.x, y: robotGroup.rotation.y });
+        robotGroup.rotation.y += 0.008;
       }
 
-      // Exploded View Subsystem Mechanical Separation Animation
+      // Exploded View Disassembly Animation
       const targetExplode = isExplodedViewRef.current ? 1.0 : 0.0;
-      explodeProgressRef.current += (targetExplode - explodeProgressRef.current) * 0.07;
+      explodeProgressRef.current += (targetExplode - explodeProgressRef.current) * 0.08;
       const ep = explodeProgressRef.current;
 
       if (robotInstance) {
-        // Displace Base Turntable downwards
-        robotInstance.baseTurntable.position.y = -ep * 0.22;
-        // Shoulder Joint lifts upward
-        robotInstance.shoulderJoint.position.y = ep * 0.35;
-        // Elbow Joint elevates further
-        robotInstance.elbowJoint.position.y = ep * 0.48;
-        // Forearm & Actuators extend outward
-        robotInstance.forearm.position.z = ep * 0.42;
-        // Head Sensor Pod rises above chassis
-        robotInstance.headSensorPod.position.y = ep * 0.52;
-        // Gripper Claws displace symmetrically
-        robotInstance.gripperLeft.position.x = -ep * 0.32;
-        robotInstance.gripperRight.position.x = ep * 0.32;
-      }
+        // Disassemble components in 3D
+        robotInstance.screenGroup.position.y = 0.65 + ep * 0.55;
+        robotInstance.chassisTop.position.y = 0.22 + ep * 0.35;
+        robotInstance.batteryPack.position.z = -0.52 - ep * 0.45;
+        robotInstance.sensorPanGroup.position.z = 0.92 + ep * 0.45;
 
-      // Run Kinematic Simulation if in autonomous mode
-      if (controlMode === 'autonomous') {
-        robotInstance.animate(elapsedTime, activeHotspotId, laserActive);
-      } else {
-        // Apply manual slider joint angles
-        robotInstance.setJointAngles(manualJoints);
+        // Spread wheels laterally outward
+        robotInstance.wheelFrontLeft.position.x = -0.78 - ep * 0.35;
+        robotInstance.wheelRearLeft.position.x = -0.78 - ep * 0.35;
+        robotInstance.wheelFrontRight.position.x = 0.78 + ep * 0.35;
+        robotInstance.wheelRearRight.position.x = 0.78 + ep * 0.35;
+
+        // Run kinematic animation for wheels, eyes, pan servo, and sonar wave
+        robotInstance.animate(elapsedTime, delta, {
+          isScanning: isScanning,
+          obstacleCm: obstacleDistance,
+        });
       }
 
       renderer.render(scene, camera);
@@ -733,750 +638,557 @@ export const RobotProject: React.FC = () => {
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', onTouchEnd);
       container.removeEventListener('mousedown', onMouseDown);
+      container.removeEventListener('wheel', onWheel);
       container.removeEventListener('touchstart', onTouchStart);
       if (renderer.domElement && container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
       renderer.dispose();
     };
-  }, [activeHotspotId, controlMode, manualJoints, laserActive, selectedFinish]);
+  }, [selectedFinish, isScanning, obstacleDistance]);
 
-  // Update robot finish when user switches theme
+  // Update robot finish
   useEffect(() => {
     if (robotInstanceRef.current) {
       robotInstanceRef.current.setFinish(selectedFinish);
     }
   }, [selectedFinish]);
 
-  // Highlight component on active change
-  useEffect(() => {
+  // Change Face Expression Handler
+  const handleSetExpression = (expr: 'listening' | 'scanning' | 'excited' | 'alert' | 'idle') => {
+    sound.playClick();
+    setSelectedExpression(expr);
     if (robotInstanceRef.current) {
-      robotInstanceRef.current.highlightComponent(activeHotspotId);
-    }
-  }, [activeHotspotId]);
-
-  // Handle GLTF Binary (.glb) Export / Download
-  const handleExportGLTF = async () => {
-    if (!robotInstanceRef.current) return;
-    setIsExporting(true);
-    sound.playLaserScan();
-    try {
-      const blob = await robotInstanceRef.current.exportGLTF('industrial_robot_pbr.glb');
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `industrial_6dof_robot_${selectedFinish}.glb`;
-      link.click();
-      URL.revokeObjectURL(url);
-      sound.playSuccessChime();
-      setSimulatedLog('GLTF EXPORT COMPLETE: Binary .glb robot model downloaded with full PBR node hierarchy.');
-    } catch (e) {
-      sound.playErrorTone();
-      setSimulatedLog('GLTF Export failed.');
-    } finally {
-      setIsExporting(false);
+      robotInstanceRef.current.updateFaceCanvas(expr, obstacleDistance);
     }
   };
-
-  // Handle Custom GLTF / GLB File Upload
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    sound.playLaserScan();
-    const url = URL.createObjectURL(file);
-
-    loadGLTFRobotModel(
-      url,
-      (customScene) => {
-        if (canvasContainerRef.current) {
-          sound.playSuccessChime();
-          setSimulatedLog(`CUSTOM GLTF MESH LOADED: "${file.name}" - PBR Shaders & ACESFilmic applied.`);
-        }
-      },
-      () => {
-        sound.playErrorTone();
-        setSimulatedLog('GLTF Parse Error. Reverting to precision CAD industrial robot.');
-      }
-    );
-  };
-
-  // Voice / Vision Simulation trigger
-  const runSimulation = () => {
-    sound.playLaserScan();
-    triggerEngagement();
-    setIsSimulatingVision(true);
-    setSimulatedLog('INITIALIZING OPENCV 6-DOF POSE ESTIMATION PIPELINE...');
-
-    setTimeout(() => {
-      setSimulatedLog('OBJECT DETECTED: [PAYLOAD_BOX_A, POSE_XYZ: (0.12, 0.45, 1.84), CONF: 98.8%]');
-      sound.playBootBeep(880, 0.05);
-    }, 600);
-
-    setTimeout(() => {
-      setSimulatedLog(
-        `SERVO & KINEMATICS: Inverse Kinematics target reached. Ultrasonic path clear at ${obstacleDistance}cm.`
-      );
-      sound.playSuccessChime();
-      setIsSimulatingVision(false);
-    }, 1600);
-  };
-
-  // Filtered hotspots
-  const filteredHotspots =
-    filterCategory === 'ALL'
-      ? HOTSPOTS
-      : HOTSPOTS.filter((h) => h.category === filterCategory);
 
   return (
-    <section id="projects" className="relative w-full py-20 px-4 sm:px-8 max-w-7xl mx-auto z-20">
+    <section id="projects" className="relative w-full py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto z-20">
       {/* Section Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-mono text-cyan-400 tracking-widest uppercase">
-            <Bot className="w-4 h-4 text-cyan-400" />
-            <span>// FEATURED PROJECT 01 // INDUSTRIAL 6-DOF ROBOT & EMBEDDED RTOS</span>
-          </div>
-          <h2 className="text-3xl sm:text-5xl font-bold font-display text-white tracking-wide mt-1">
-            AI-ASSISTED ROBOT FOR PERSONAL ASSISTANCE
-          </h2>
-          <div className="flex flex-wrap items-center gap-3 pt-2 font-mono text-xs text-slate-300">
-            <span className="px-2.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
-              YEAR: 2025
-            </span>
-            <span className="px-2.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800">
-              TECH: Python • OpenCV • IoT • C • FreeRTOS
-            </span>
-            <span className="text-slate-400">PBR GLTF 6-DOF Industrial Cell with Clickable Zones</span>
-          </div>
-        </div>
-
-        {/* Industrial Finish Selector */}
-        <div className="flex flex-wrap items-center gap-1.5 glass-panel p-1.5 rounded-xl border border-cyan-500/30 font-mono text-xs">
-          <span className="text-[10px] text-slate-400 px-1">PBR FINISH:</span>
-          <button
-            onClick={() => {
-              sound.playClick();
-              setSelectedFinish('industrial_orange');
-            }}
-            className={`px-2.5 py-1 rounded cursor-pointer transition-all ${
-              selectedFinish === 'industrial_orange'
-                ? 'bg-amber-500 text-black font-bold shadow-[0_0_10px_rgba(245,158,11,0.4)]'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            KUKA ORANGE
-          </button>
-          <button
-            onClick={() => {
-              sound.playClick();
-              setSelectedFinish('titanium_stealth');
-            }}
-            className={`px-2.5 py-1 rounded cursor-pointer transition-all ${
-              selectedFinish === 'titanium_stealth'
-                ? 'bg-slate-700 text-cyan-300 font-bold border border-cyan-400/50'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            TITANIUM
-          </button>
-          <button
-            onClick={() => {
-              sound.playClick();
-              setSelectedFinish('cyber_lab_white');
-            }}
-            className={`px-2.5 py-1 rounded cursor-pointer transition-all ${
-              selectedFinish === 'cyber_lab_white'
-                ? 'bg-slate-200 text-black font-bold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            LAB WHITE
-          </button>
-          <button
-            onClick={() => {
-              sound.playClick();
-              setSelectedFinish('defense_carbon');
-            }}
-            className={`px-2.5 py-1 rounded cursor-pointer transition-all ${
-              selectedFinish === 'defense_carbon'
-                ? 'bg-slate-950 text-purple-400 font-bold border border-purple-500/50'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            CARBON
-          </button>
-        </div>
-      </div>
-
-      {/* Futuristic Laboratory Scanline Wrapper Container */}
-      <div
-        id="robot-project-container"
-        className="scanline-effect scanline-beam relative p-3 sm:p-6 rounded-3xl glass-panel border border-[var(--border-primary)] shadow-[var(--shadow-panel)] overflow-hidden"
-      >
-        <div className="cyber-corner-tl" />
-        <div className="cyber-corner-tr" />
-        <div className="cyber-corner-bl" />
-        <div className="cyber-corner-br" />
-
-        {/* Laboratory Scanline HUD Banner */}
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono pb-3 mb-5 border-b border-[var(--border-subtle)]">
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-            <span className="text-[var(--text-accent)] font-semibold tracking-wider uppercase">
-              // LABORATORY SCANLINE HUD // {themeConfig.name.toUpperCase()}
-            </span>
-            <span className="hidden sm:inline-block px-2 py-0.5 rounded bg-[var(--chip-bg)] border border-[var(--chip-border)] text-[var(--chip-text)] text-[10px]">
-              60Hz CRT RASTER ACTIVE
-            </span>
+      <ScrollReveal direction="up">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 mb-8">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-mono text-cyan-400 tracking-widest uppercase mb-2">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+              <span>// PROJECT SHOWCASE • AUTONOMOUS SMART ROBOTIC CAR //</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold font-display text-white tracking-tight">
+              INTERACTIVE ROBOTICS LAB
+            </h2>
+            <p className="text-sm font-mono text-cyan-300/90 mt-1">
+              Raspberry Pi • OpenCV Neural Vision • HC-SR04 Sonar • FreeRTOS Motor Control
+            </p>
+            <p className="text-xs font-mono text-slate-400 mt-2 max-w-2xl leading-relaxed">
+              An intelligent 4WD mobile robotic vehicle equipped with a top-mounted Raspberry Pi animated emotive LCD
+              display, front HC-SR04 ultrasonic radar, dual-tier acrylic chassis, and high-torque TT DC gear motors with
+              deep-tread traction wheels.
+            </p>
           </div>
 
-          <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)]">
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              6-DOF PBR KINEMATICS ENGINE
-            </span>
-            <span className="text-[var(--text-secondary)] font-bold">[OPERATIONAL]</span>
+          {/* PBR Hardware Finish Selector */}
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900/80 border border-slate-800 backdrop-blur-md font-mono text-xs shadow-lg">
+            <span className="text-[10px] text-slate-400 px-2 font-semibold">FINISH:</span>
+            {(
+              [
+                { id: 'authentic_lab', label: 'AUTHENTIC LAB', color: 'bg-amber-500 text-slate-950 font-bold' },
+                { id: 'titanium_stealth', label: 'TITANIUM', color: 'bg-slate-700 text-cyan-300 font-bold border border-cyan-500/40' },
+                { id: 'cyber_lab_white', label: 'LAB WHITE', color: 'bg-slate-200 text-slate-950 font-bold' },
+                { id: 'defense_carbon', label: 'CARBON', color: 'bg-slate-950 text-purple-300 font-bold border border-purple-500/40' },
+              ] as const
+            ).map((finish) => (
+              <button
+                key={finish.id}
+                data-magnetic="true"
+                onClick={() => {
+                  sound.playClick();
+                  setSelectedFinish(finish.id);
+                }}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-[11px] ${
+                  selectedFinish === finish.id
+                    ? finish.color + ' shadow-[0_0_12px_rgba(0,240,255,0.3)]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                {finish.label}
+              </button>
+            ))}
           </div>
         </div>
+      </ScrollReveal>
 
-        {/* Main 3D Robot Interactive Console */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-          {/* Left Column: 3D Robot Canvas & Interactive Clickable 3D Hotspots */}
-          <div className="lg:col-span-7 glass-panel-glow p-4 sm:p-6 rounded-2xl border border-[var(--border-primary)] flex flex-col relative min-h-[560px]">
-            <div className="cyber-corner-tl" />
-            <div className="cyber-corner-tr" />
-            <div className="cyber-corner-bl" />
-            <div className="cyber-corner-br" />
+      {/* Main 3-Column Engineering Dashboard */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Left Column: Interactive Component Hotspot Directory */}
+        <div className="lg:col-span-3 flex flex-col gap-3">
+          <div className="flex items-center justify-between px-1 pb-1">
+            <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+              HOTSPOT DIRECTORY
+            </span>
+            <span className="text-[10px] font-mono text-cyan-400/80">8 SUBSYSTEMS</span>
+          </div>
 
-            {/* Top Bar with Mode Controls, GLTF Importer & GLTF Exporter */}
-            <div className="flex flex-wrap justify-between items-center text-xs font-mono border-b border-slate-800 pb-3 mb-2 gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-cyan-300 flex items-center gap-1.5 font-semibold">
-                  <Target className="w-4 h-4 text-cyan-400 animate-spin" />
-                  INTERACTIVE 3D GLTF ROBOT
-                </span>
-                <span className="text-[10px] text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-800">
-                  CLICKABLE ZONES ACTIVE
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                {/* Voice Command Microphone Trigger */}
+          <div className="space-y-2 flex-1 flex flex-col justify-start max-h-[640px] overflow-y-auto pr-1">
+            {WHEELED_ROBOT_COMPONENTS.map((comp) => {
+              const isSelected = activeComponentId === comp.id;
+              return (
                 <button
-                  id="robot-voice-mic-btn"
-                  onClick={handleToggleVoice}
-                  title={isVoiceListening ? 'Stop Voice Listening' : 'Speak "Rotate", "Exploded View", "Reset" to control robot'}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono cursor-pointer transition-all ${
-                    isVoiceListening
-                      ? 'bg-rose-950 text-rose-300 border border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.5)] animate-pulse font-bold'
-                      : 'bg-slate-900 hover:bg-cyan-950 text-cyan-300 border border-cyan-700/70 hover:border-cyan-400'
-                  }`}
-                >
-                  <Mic className={`w-3.5 h-3.5 ${isVoiceListening ? 'text-rose-400 animate-bounce' : 'text-cyan-400'}`} />
-                  <span>{isVoiceListening ? 'VOICE [LISTENING]' : 'VOICE [MIC]'}</span>
-                </button>
-
-                {/* Auto-Rotation Toggle */}
-                <button
-                  id="robot-rotate-btn"
-                  onClick={() => handleToggleRotate()}
-                  title="Say 'Rotate' or click to toggle continuous 360° 3D auto-rotation"
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono cursor-pointer transition-all ${
-                    isAutoRotating
-                      ? 'bg-cyan-500 text-black font-bold shadow-[0_0_12px_rgba(0,240,255,0.4)]'
-                      : 'bg-slate-900 text-slate-300 border border-slate-800 hover:border-slate-700 hover:text-white'
-                  }`}
-                >
-                  <RotateCw className={`w-3.5 h-3.5 ${isAutoRotating ? 'animate-spin' : ''}`} />
-                  <span>ROTATE: {isAutoRotating ? 'ON' : 'OFF'}</span>
-                </button>
-
-                {/* Exploded View Mode Toggle */}
-                <button
-                  id="robot-exploded-btn"
-                  onClick={() => handleToggleExplodedView()}
-                  title="Say 'Exploded View' or click to disassemble internal engineering components"
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono cursor-pointer transition-all ${
-                    isExplodedView
-                      ? 'bg-purple-600 text-white font-bold shadow-[0_0_14px_rgba(168,85,247,0.5)] border border-purple-400'
-                      : 'bg-slate-900 text-slate-300 border border-slate-800 hover:border-purple-800 hover:text-purple-300'
-                  }`}
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>EXPLODED VIEW: {isExplodedView ? 'ENGAGED' : 'OFF'}</span>
-                </button>
-
-                {/* Reset Joint Positions and Viewport */}
-                <button
-                  id="robot-reset-btn"
-                  onClick={handleResetModel}
-                  title="Say 'Reset' or click to restore zero kinematics and camera coordinates"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-900 border border-slate-800 hover:border-cyan-400 text-slate-300 hover:text-cyan-300 text-[11px] cursor-pointer transition-all"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>RESET</span>
-                </button>
-
-                {/* Toggle Autonomous vs Manual Jigs */}
-                <button
+                  key={comp.id}
                   onClick={() => {
                     sound.playClick();
-                    setControlMode(controlMode === 'autonomous' ? 'manual' : 'autonomous');
+                    setActiveComponentId(comp.id);
+                    targetCameraPosRef.current = comp.cameraTarget;
+                    setDiagnosticLog(`FOCUSED: [${comp.title.toUpperCase()}]`);
                   }}
-                  className={`px-2.5 py-1 rounded text-[11px] font-mono cursor-pointer transition-all ${
-                    controlMode === 'manual'
-                      ? 'bg-cyan-500 text-black font-bold shadow-[0_0_10px_rgba(0,240,255,0.4)]'
-                      : 'bg-slate-900 text-slate-300 border border-slate-800 hover:text-white'
+                  onMouseEnter={() => sound.playHover()}
+                  className={`w-full text-left p-3 rounded-xl transition-all duration-200 cursor-pointer backdrop-blur-md relative group ${
+                    isSelected
+                      ? 'bg-slate-900/90 border border-cyan-500/60 shadow-[0_0_20px_rgba(0,240,255,0.15)] ring-1 ring-cyan-400/30'
+                      : 'bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 hover:bg-slate-900/40'
                   }`}
                 >
-                  {controlMode === 'manual' ? 'MANUAL JIGS' : 'AUTONOMOUS'}
-                </button>
-
-                {/* Laser Beam Toggle */}
-                <button
-                  onClick={() => {
-                    sound.playClick();
-                    setLaserActive(!laserActive);
-                  }}
-                  className={`px-2 py-1 rounded text-[11px] font-mono cursor-pointer transition-all ${
-                    laserActive
-                      ? 'bg-rose-950 text-rose-300 border border-rose-500/50'
-                      : 'bg-slate-900 text-slate-500 border border-slate-800'
-                  }`}
-                >
-                  LASER: {laserActive ? 'ON' : 'OFF'}
-                </button>
-
-                {/* Export GLTF .glb model */}
-                <button
-                  onClick={handleExportGLTF}
-                  disabled={isExporting}
-                  title="Download this industrial robot model as standard GLTF (.glb)"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-900 border border-cyan-800/80 hover:border-cyan-400 text-cyan-300 text-[11px] cursor-pointer transition-all"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>{isExporting ? 'EXPORTING...' : 'GLTF (.glb)'}</span>
-                </button>
-
-                {/* Upload GLTF button */}
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  title="Import custom .gltf / .glb robot mesh"
-                  className="p-1.5 rounded bg-slate-900 border border-slate-800 hover:border-cyan-400 text-slate-400 hover:text-cyan-300 cursor-pointer transition-all"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".gltf,.glb"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </div>
-            </div>
-
-            {/* 3D Canvas Container with Clickable Zones Overlay & Scanline Effect */}
-            <div className="relative w-full flex-1 min-h-[380px] rounded-xl overflow-hidden bg-slate-950/90 border border-slate-800 scanline-effect scanline-beam">
-            <div
-              ref={canvasContainerRef}
-              id="robot-3d-canvas"
-              className="w-full h-full cursor-grab active:cursor-grabbing"
-              title="Click directly on any 3D sensor or servo to inspect, or drag to orbit in 360°"
-            />
-
-            {/* Hovered Part Floating Tooltip Badge */}
-            {hoveredPartName && (
-              <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-cyan-400/50 font-mono text-xs text-cyan-300 flex items-center gap-2 shadow-[0_0_15px_rgba(0,240,255,0.3)] pointer-events-none animate-fadeIn">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                <span>3D ZONE: {hoveredPartName.toUpperCase()}</span>
-                <span className="text-[10px] text-slate-400">(CLICK TO INSPECT)</span>
-              </div>
-            )}
-
-            {/* Interactive Clickable 3D Overlay Hotspot Pins on Robot */}
-            <div className="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
-              <div className="bg-black/80 px-2 py-1 rounded border border-slate-800 font-mono text-[10px] text-slate-400 flex items-center gap-1.5">
-                <Target className="w-3 h-3 text-cyan-400" />
-                <span>CLICK ANY 3D COMPONENT OR BEACON BELOW:</span>
-              </div>
-            </div>
-
-            {/* Neural Vision Target Overlay Reticle on top of Canvas */}
-            {activeHotspotId === 'vision' && (
-              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                <div className="w-44 h-44 border border-rose-500/60 rounded-lg relative animate-pulse">
-                  <div className="absolute top-1 left-1 text-[9px] font-mono text-rose-400 bg-black/70 px-1.5 py-0.5 rounded border border-rose-500/30">
-                    OPENCV: TARGET_LOCKED
-                  </div>
-                  <div className="absolute bottom-1 right-1 text-[9px] font-mono text-emerald-400 bg-black/70 px-1.5 py-0.5 rounded border border-emerald-500/30">
-                    POSE: [0.12, 0.45, 1.84]
-                  </div>
-                  <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-rose-400" />
-                  <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-rose-400" />
-                  <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-rose-400" />
-                  <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-rose-400" />
-                </div>
-              </div>
-            )}
-
-            {/* Heads-Up Display (HUD) Cyber Telemetry & Sensor Packets Overlay */}
-            <RobotHUDOverlay
-              isEngaged={isEngaged}
-              activeHotspotId={activeHotspotId}
-              activeHotspotName={activeHotspot.name}
-              hoveredPartName={hoveredPartName}
-              controlMode={controlMode}
-              laserActive={laserActive}
-              obstacleDistance={obstacleDistance}
-              jointAngles={manualJoints}
-              robotRotation={robotRotation}
-            />
-
-            {/* Manual Kinematics Floating Sliders overlay if in manual mode */}
-            {controlMode === 'manual' && (
-              <div className="absolute bottom-3 left-3 bg-black/90 p-3 rounded-xl border border-cyan-500/50 backdrop-blur-md font-mono text-[10px] space-y-2 max-w-[210px] pointer-events-auto z-20 shadow-[0_0_25px_rgba(0,240,255,0.2)]">
-                <div className="flex justify-between text-cyan-300 font-bold border-b border-slate-800 pb-1">
-                  <span>6-DOF SERVO JIGS</span>
-                  <Sliders className="w-3 h-3 text-cyan-400" />
-                </div>
-                <div>
-                  <div className="flex justify-between text-slate-400 mb-0.5">
-                    <span>WAIST (J1):</span>
-                    <span>{manualJoints.waist.toFixed(2)} rad</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="-1.5"
-                    max="1.5"
-                    step="0.05"
-                    value={manualJoints.waist}
-                    onChange={(e) => {
-                      triggerEngagement();
-                      setManualJoints({ ...manualJoints, waist: Number(e.target.value) });
-                    }}
-                    className="w-full accent-cyan-400 h-1 bg-slate-800 rounded cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between text-slate-400 mb-0.5">
-                    <span>SHOULDER (J2):</span>
-                    <span>{manualJoints.shoulder.toFixed(2)} rad</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="-0.8"
-                    max="0.4"
-                    step="0.05"
-                    value={manualJoints.shoulder}
-                    onChange={(e) => {
-                      triggerEngagement();
-                      setManualJoints({ ...manualJoints, shoulder: Number(e.target.value) });
-                    }}
-                    className="w-full accent-amber-400 h-1 bg-slate-800 rounded cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between text-slate-400 mb-0.5">
-                    <span>ELBOW (J3):</span>
-                    <span>{manualJoints.elbow.toFixed(2)} rad</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1.2"
-                    step="0.05"
-                    value={manualJoints.elbow}
-                    onChange={(e) => {
-                      triggerEngagement();
-                      setManualJoints({ ...manualJoints, elbow: Number(e.target.value) });
-                    }}
-                    className="w-full accent-purple-400 h-1 bg-slate-800 rounded cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between text-slate-400 mb-0.5">
-                    <span>GRIPPER CLAMP:</span>
-                    <span>{(manualJoints.gripperOpen * 100).toFixed(0)}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={manualJoints.gripperOpen}
-                    onChange={(e) => {
-                      triggerEngagement();
-                      setManualJoints({ ...manualJoints, gripperOpen: Number(e.target.value) });
-                    }}
-                    className="w-full accent-emerald-400 h-1 bg-slate-800 rounded cursor-pointer"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* In-Scene Voice Command Floating HUD Banner */}
-            <div className="absolute bottom-2.5 left-2.5 right-2.5 z-20 pointer-events-auto flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-950/85 backdrop-blur-md border border-cyan-500/30 font-mono text-xs shadow-[0_0_20px_rgba(0,0,0,0.5)]">
-              <div className="flex items-center gap-2 min-w-0">
-                <span
-                  className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                    isVoiceListening
-                      ? 'bg-rose-500 animate-ping'
-                      : isAutoRotating || isExplodedView
-                      ? 'bg-cyan-400 animate-pulse'
-                      : 'bg-emerald-400'
-                  }`}
-                />
-                <span className="text-cyan-300 font-bold flex items-center gap-1 text-[11px] shrink-0">
-                  <Mic className="w-3.5 h-3.5 text-cyan-400" />
-                  VOICE:
-                </span>
-                <span className="text-slate-300 font-normal truncate text-[11px]">
-                  {voiceTranscript ? (
-                    <span className="text-white font-semibold">"{voiceTranscript}"</span>
-                  ) : isVoiceListening ? (
-                    <span className="text-rose-300 font-semibold animate-pulse">
-                      Listening... Speak "Rotate", "Exploded View", "Reset"
-                    </span>
-                  ) : (
-                    <span className="text-slate-400">
-                      Mic standby. Click <strong className="text-cyan-300">VOICE [MIC]</strong> or click triggers below:
-                    </span>
-                  )}
-                </span>
-              </div>
-
-              {/* Instant Voice Trigger Quick Action Chips */}
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  onClick={() => handleVoiceTrigger('Rotate')}
-                  className="px-2 py-0.5 rounded bg-slate-900/90 border border-cyan-800/70 hover:border-cyan-400 text-cyan-300 text-[10px] cursor-pointer transition-all hover:bg-cyan-950"
-                  title="Test voice command 'Rotate'"
-                >
-                  Say "Rotate"
-                </button>
-                <button
-                  onClick={() => handleVoiceTrigger('Exploded View')}
-                  className="px-2 py-0.5 rounded bg-slate-900/90 border border-purple-800/70 hover:border-purple-400 text-purple-300 text-[10px] cursor-pointer transition-all hover:bg-purple-950"
-                  title="Test voice command 'Exploded View'"
-                >
-                  Say "Exploded View"
-                </button>
-                <button
-                  onClick={() => handleVoiceTrigger('Reset')}
-                  className="px-2 py-0.5 rounded bg-slate-900/90 border border-slate-700 hover:border-slate-400 text-slate-300 text-[10px] cursor-pointer transition-all hover:bg-slate-800"
-                  title="Test voice command 'Reset'"
-                >
-                  Say "Reset"
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Interactive Subsystem Hotspots / Clickable Zone Selector */}
-          <div className="mt-4 pt-3 border-t border-slate-800/80">
-            {/* Category Filter Pills */}
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-2 font-mono text-[11px]">
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-400">FILTER ZONES:</span>
-                {(['ALL', 'SENSOR', 'SERVO', 'ACTUATOR', 'CORE'] as const).map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => {
-                      sound.playClick();
-                      setFilterCategory(cat);
-                    }}
-                    className={`px-2 py-0.5 rounded text-[10px] cursor-pointer transition-all ${
-                      filterCategory === cat
-                        ? 'bg-cyan-500 text-black font-bold'
-                        : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-              <span className="text-cyan-400 text-[10px] flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-cyan-400" />
-                8 INTERACTIVE ZONES
-              </span>
-            </div>
-
-            {/* Clickable Zone Badges */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {filteredHotspots.map((hotspot) => {
-                const isActive = activeHotspotId === hotspot.id;
-                return (
-                  <button
-                    key={hotspot.id}
-                    id={`robot-hotspot-${hotspot.id}`}
-                    onClick={() => {
-                      sound.playClick();
-                      setActiveHotspotId(hotspot.id);
-                      setSimulatedLog(`INSPECTING: [${hotspot.name.toUpperCase()}]`);
-                    }}
-                    onMouseEnter={() => sound.playHover()}
-                    className={`p-2 rounded-lg text-left font-mono transition-all cursor-pointer ${
-                      isActive
-                        ? 'bg-cyan-950/90 border-cyan-400 border shadow-[0_0_15px_rgba(0,240,255,0.35)]'
-                        : 'bg-slate-900/60 border border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-0.5">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-white truncate">
-                        {hotspot.icon}
-                        <span className="truncate">{hotspot.name}</span>
-                      </div>
-                      <span
-                        className={`text-[9px] px-1 py-0.2 rounded font-mono ${
-                          hotspot.category === 'SENSOR'
-                            ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60'
-                            : hotspot.category === 'SERVO'
-                            ? 'bg-amber-950/80 text-amber-300 border border-amber-800/60'
-                            : hotspot.category === 'ACTUATOR'
-                            ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'
-                            : 'bg-purple-950/80 text-purple-300 border border-purple-800/60'
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          isSelected ? 'bg-cyan-950/80 border border-cyan-500/50' : 'bg-slate-900 border border-slate-800'
                         }`}
                       >
-                        {hotspot.category}
-                      </span>
+                        <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-white font-mono tracking-tight group-hover:text-cyan-300 transition-colors">
+                          {comp.name}
+                        </h4>
+                        <span className="text-[10px] font-mono text-slate-400 block truncate">
+                          {comp.subtitle}
+                        </span>
+                      </div>
                     </div>
-                    <span className="text-[10px] text-slate-400 block truncate">
-                      {hotspot.subtitle}
+
+                    <span
+                      className={`text-[9px] font-mono px-1.5 py-0.5 rounded font-semibold shrink-0 ${
+                        isSelected
+                          ? 'bg-cyan-950 text-cyan-300 border border-cyan-600/50'
+                          : 'bg-slate-900 text-slate-500'
+                      }`}
+                    >
+                      {comp.category}
                     </span>
-                  </button>
-                );
-              })}
-            </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-slate-800/60 text-[10px] font-mono text-slate-400">
+                    <span className="text-cyan-400 font-semibold">{comp.telemetry[0].label}:</span>
+                    <span className="text-slate-300">{comp.telemetry[0].value}</span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Right Column: Technical Explanatory UI Panels & Interactive Test Terminal */}
-        <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
-          {/* Active Subsystem Detail Card */}
-          <div className="glass-panel p-6 rounded-2xl border border-cyan-500/40 relative space-y-4 shadow-[0_0_30px_rgba(0,240,255,0.1)]">
-            <div className="cyber-corner-tl" />
-            <div className="cyber-corner-tr" />
-            <div className="cyber-corner-bl" />
-            <div className="cyber-corner-br" />
+        {/* Center Column: Dominant Hero 3D Robot Visualizer & Direct Control Pad */}
+        <div className="lg:col-span-6 flex flex-col rounded-2xl bg-slate-950/80 border border-slate-800/90 relative overflow-hidden shadow-2xl min-h-[600px]">
+          {/* Subtle Cyber Corner Marks */}
+          <div className="cyber-corner-tl" />
+          <div className="cyber-corner-tr" />
+          <div className="cyber-corner-bl" />
+          <div className="cyber-corner-br" />
 
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
-                  {activeHotspot.icon}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-bold font-display text-white">
-                      {activeHotspot.title}
-                    </h3>
-                  </div>
-                  <p className="text-xs font-mono text-cyan-400">
-                    {activeHotspot.subtitle}
-                  </p>
-                </div>
-              </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
-                {activeHotspot.category}
-              </span>
-            </div>
-
-            {/* Core Description Verbatim */}
-            <p className="text-sm font-mono text-slate-200 leading-relaxed bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
-              {activeHotspot.description}
-            </p>
-
-            {/* Subsystem Specifications */}
-            <div className="space-y-2 font-mono text-xs">
-              <div className="flex justify-between items-center text-slate-400 font-semibold">
-                <span>ENGINEERING SPECIFICATIONS:</span>
-                {activeHotspot.voltage && (
-                  <span className="text-amber-400 text-[10px]">{activeHotspot.voltage}</span>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                {activeHotspot.specs.map((spec, i) => (
-                  <div key={i} className="flex items-center gap-2 text-slate-300">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span>{spec}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Live Telemetry Chips */}
-            <div className="pt-2 grid grid-cols-3 gap-2 border-t border-slate-800/80">
-              {activeHotspot.telemetry.map((t, idx) => (
-                <div key={idx} className="p-2 rounded bg-slate-950/70 border border-slate-800 font-mono text-[10px]">
-                  <span className="text-slate-500 block truncate">{t.label}</span>
-                  <span className="text-cyan-300 font-bold truncate">{t.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Interactive Simulation & Test Panel */}
-          <div className="glass-panel p-5 rounded-2xl border border-slate-800 space-y-3 font-mono">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-cyan-300 font-semibold flex items-center gap-1.5">
-                <Play className="w-3.5 h-3.5 text-cyan-400" />
-                INTERACTIVE ROBOTIC TEST TERMINAL
+          {/* Top Floating Action & Viewport Bar */}
+          <div className="absolute top-3 left-3 right-3 z-30 flex flex-wrap items-center justify-between gap-2 p-2 rounded-xl bg-slate-950/85 backdrop-blur-md border border-slate-800 text-xs font-mono shadow-xl">
+            {/* Camera View Presets */}
+            <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-lg border border-slate-800 text-[11px]">
+              <span className="text-[10px] text-slate-400 px-1.5 font-semibold flex items-center gap-1">
+                <Camera className="w-3 h-3 text-cyan-400" />
+                VIEW:
               </span>
               <button
-                id="test-robot-simulation-btn"
-                onClick={runSimulation}
-                disabled={isSimulatingVision}
-                className="px-2.5 py-1 rounded bg-cyan-400 hover:bg-cyan-300 text-black font-bold text-xs transition-all shadow-[0_0_10px_rgba(0,240,255,0.4)] disabled:opacity-50 cursor-pointer"
+                onClick={() => handleCameraPreset('overview')}
+                className="px-2 py-0.5 rounded text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
               >
-                {isSimulatingVision ? 'CALCULATING...' : 'TRIGGER DIAGNOSTIC'}
+                Overview
+              </button>
+              <button
+                onClick={() => handleCameraPreset('sonar')}
+                className="px-2 py-0.5 rounded text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
+              >
+                Sonar
+              </button>
+              <button
+                onClick={() => handleCameraPreset('screen')}
+                className="px-2 py-0.5 rounded text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
+              >
+                Face LCD
+              </button>
+              <button
+                onClick={() => handleCameraPreset('motors')}
+                className="px-2 py-0.5 rounded text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
+              >
+                Motors
               </button>
             </div>
 
-            {/* Live Terminal Log Output */}
-            <div className="bg-black/70 p-3 rounded-lg border border-slate-800 text-xs text-slate-300 space-y-1">
-              <div className="text-[11px] text-slate-500">// ROBOT OS BUS TELEMETRY:</div>
-              <div className="text-cyan-300 flex items-center gap-2 font-semibold">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                {simulatedLog}
+            {/* Quick Action Toggles */}
+            <div className="flex items-center gap-1.5">
+              {/* Rotate 360 */}
+              <button
+                onClick={() => handleToggleRotate()}
+                title="Toggle continuous 360° rotation"
+                className={`p-2 rounded-lg transition-all cursor-pointer ${
+                  isAutoRotating
+                    ? 'bg-cyan-500 text-slate-950 shadow-[0_0_10px_rgba(0,240,255,0.4)]'
+                    : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${isAutoRotating ? 'animate-spin' : ''}`} />
+              </button>
+
+              {/* Exploded View Disassembly */}
+              <button
+                onClick={() => handleToggleExplodedView()}
+                title="Toggle internal subsystem exploded view"
+                className={`p-2 rounded-lg transition-all cursor-pointer ${
+                  isExplodedView
+                    ? 'bg-purple-600 text-white shadow-[0_0_12px_rgba(168,85,247,0.5)] border border-purple-400'
+                    : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-purple-300'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Reset View */}
+              <button
+                onClick={handleResetModel}
+                title="Reset robot viewport & pose"
+                className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-cyan-300 cursor-pointer transition-all"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Voice Command Mic */}
+              <button
+                onClick={handleToggleVoice}
+                title="Toggle voice command microphone"
+                className={`p-2 rounded-lg transition-all cursor-pointer ${
+                  isVoiceListening
+                    ? 'bg-rose-950 text-rose-300 border border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.5)] animate-pulse'
+                    : 'bg-slate-900 border border-slate-800 text-cyan-400 hover:border-cyan-400'
+                }`}
+              >
+                <Mic className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* 3D Canvas Viewport */}
+          <div
+            ref={canvasContainerRef}
+            id="robot-3d-canvas"
+            className="w-full flex-1 min-h-[460px] cursor-grab active:cursor-grabbing"
+            title="Drag to orbit in 360° • Scroll to zoom • Click any component to inspect"
+          />
+
+          {/* Hovered Zone Floating Tag */}
+          {hoveredPartName && (
+            <div className="absolute top-16 right-4 z-20 px-3 py-1.5 rounded-lg bg-slate-950/85 backdrop-blur-md border border-cyan-500/50 text-cyan-300 font-mono text-xs shadow-[0_0_15px_rgba(0,240,255,0.25)] pointer-events-none animate-in fade-in flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+              <span>COMPONENT: {hoveredPartName.toUpperCase()}</span>
+            </div>
+          )}
+
+          {/* Interactive Robot Drive Controller Pad Overlay */}
+          <div className="p-3 bg-slate-950/90 border-t border-slate-800/90 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono z-20">
+            {/* Directional Pad */}
+            <div className="flex items-center gap-2">
+              <div className="grid grid-cols-3 gap-1.5">
+                <div />
+                <button
+                  onClick={() => handleDrive('forward')}
+                  title="Forward (W / Up)"
+                  className={`p-2 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                    activeDriveCommand === 'forward'
+                      ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-[0_0_12px_rgba(0,240,255,0.5)]'
+                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  <ArrowUp className="w-4 h-4" />
+                </button>
+                <div />
+
+                <button
+                  onClick={() => handleDrive('left')}
+                  title="Turn Left (A / Left)"
+                  className={`p-2 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                    activeDriveCommand === 'left'
+                      ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-[0_0_12px_rgba(0,240,255,0.5)]'
+                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+
+                <button
+                  onClick={() => handleDrive('stop')}
+                  title="Stop (Space / Halt)"
+                  className={`p-2 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                    activeDriveCommand === 'stop'
+                      ? 'bg-rose-600 text-white border-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.5)]'
+                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  <Square className="w-4 h-4 fill-current" />
+                </button>
+
+                <button
+                  onClick={() => handleDrive('right')}
+                  title="Turn Right (D / Right)"
+                  className={`p-2 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                    activeDriveCommand === 'right'
+                      ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-[0_0_12px_rgba(0,240,255,0.5)]'
+                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+
+                <div />
+                <button
+                  onClick={() => handleDrive('backward')}
+                  title="Backward (S / Down)"
+                  className={`p-2 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                    activeDriveCommand === 'backward'
+                      ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-[0_0_12px_rgba(0,240,255,0.5)]'
+                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  <ArrowDown className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDrive('spin')}
+                  title="360° Spin"
+                  className={`p-2 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                    activeDriveCommand === 'spin'
+                      ? 'bg-purple-600 text-white border-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.5)]'
+                      : 'bg-slate-900 border-slate-800 text-purple-300 hover:bg-slate-800'
+                  }`}
+                >
+                  <RotateCw className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="text-[11px] text-slate-400 leading-tight hidden sm:block">
+                <span className="text-cyan-400 font-bold block">4WD SKID STEER</span>
+                <span>WASD / Arrow Keys</span>
               </div>
             </div>
 
-            {/* Distance Slider Sensor */}
-            <div className="pt-2">
+            {/* Throttle Speed Slider & Expression Selector */}
+            <div className="flex flex-col gap-2 w-full sm:w-auto">
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] text-slate-400 shrink-0">PWM THROTTLE:</span>
+                <input
+                  type="range"
+                  min="20"
+                  max="100"
+                  value={throttleSpeed}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setThrottleSpeed(val);
+                    if (robotInstanceRef.current && activeDriveCommand !== 'stop') {
+                      robotInstanceRef.current.setDriveCommand(activeDriveCommand, val);
+                    }
+                  }}
+                  className="w-28 accent-cyan-400 h-1.5 bg-slate-800 rounded cursor-pointer"
+                />
+                <span className="text-xs font-bold text-cyan-300 font-mono w-10 text-right">{throttleSpeed}%</span>
+              </div>
+
+              {/* Expression Selector Buttons */}
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-400 shrink-0">EYES:</span>
+                {(['listening', 'scanning', 'excited', 'alert'] as const).map((expr) => (
+                  <button
+                    key={expr}
+                    onClick={() => handleSetExpression(expr)}
+                    className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold transition-all cursor-pointer ${
+                      selectedExpression === expr
+                        ? 'bg-cyan-950 border border-cyan-500 text-cyan-300'
+                        : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {expr}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Live Telemetry, Working Principle & Component Inspector */}
+        <div className="lg:col-span-3 flex flex-col gap-4">
+          <div className="flex items-center justify-between px-1 pb-1">
+            <span className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              ENGINEERING INSPECTOR
+            </span>
+            <span className="text-[10px] font-mono text-emerald-400 font-semibold">1,000 Hz TELEMETRY</span>
+          </div>
+
+          {/* Card 1: Active Component Details & Working Principle */}
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-cyan-500/30 backdrop-blur-md space-y-3 font-mono flex-1 flex flex-col justify-between shadow-xl">
+            <div>
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-md bg-slate-900 text-cyan-400 border border-slate-800">
+                    <Cpu className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white font-mono">{activeComponent.name}</h4>
+                    <span className="text-[10px] text-cyan-300 block truncate">{activeComponent.subtitle}</span>
+                  </div>
+                </div>
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-semibold">
+                  {activeComponent.category}
+                </span>
+              </div>
+
+              {/* Working Principle & Purpose */}
+              <div className="space-y-2 text-[11px] text-slate-300 leading-relaxed">
+                <div>
+                  <span className="text-cyan-400 font-semibold block text-[10px]">HOW IT WORKS IN THE ROBOT:</span>
+                  <p className="text-slate-400 text-[11px] mt-0.5 leading-relaxed">{activeComponent.howItWorks}</p>
+                </div>
+
+                <div className="pt-2 border-t border-slate-800/60">
+                  <span className="text-amber-400 font-semibold block text-[10px] mb-1">TECHNICAL SPECIFICATIONS:</span>
+                  <div className="space-y-1">
+                    {activeComponent.specs.slice(0, 3).map((spec, i) => (
+                      <div key={i} className="flex items-start gap-1.5 text-[10px] text-slate-300">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0 mt-0.5" />
+                        <span>{spec}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Hardware Pinout & Voltage Chips */}
+            <div className="space-y-2 pt-2 border-t border-slate-800/80 text-[10px]">
+              <div className="flex justify-between items-center bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                <span className="text-slate-400">PINOUT:</span>
+                <span className="text-cyan-300 font-bold truncate max-w-[170px]">{activeComponent.pinout}</span>
+              </div>
+              <div className="flex justify-between items-center bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                <span className="text-slate-400">VOLTAGE:</span>
+                <span className="text-amber-400 font-bold">{activeComponent.voltage}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Ultrasonic Sonar Radar Simulation Slider */}
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/90 backdrop-blur-md space-y-3 font-mono shadow-xl">
+            <div>
               <div className="flex justify-between text-[11px] text-slate-400 mb-1">
-                <span>ULTRASONIC PROXIMITY SENSOR (HC-SR04):</span>
+                <span>HC-SR04 SONAR DISTANCE:</span>
                 <span
                   className={`font-bold ${
-                    obstacleDistance < 20 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'
+                    obstacleDistance < 18 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'
                   }`}
                 >
-                  {obstacleDistance} cm {obstacleDistance < 20 ? '[CRITICAL WARNING]' : '[CLEAR]'}
+                  {obstacleDistance} cm {obstacleDistance < 18 ? '[OBSTACLE CLOSE!]' : '[PATH CLEAR]'}
                 </span>
               </div>
               <input
                 type="range"
                 min="5"
-                max="200"
+                max="150"
                 value={obstacleDistance}
                 onChange={(e) => {
-                  triggerEngagement();
                   const val = Number(e.target.value);
                   setObstacleDistance(val);
-                  if (val < 20) {
+                  if (val < 18) {
                     sound.playErrorTone();
+                    if (robotInstanceRef.current) {
+                      robotInstanceRef.current.updateFaceCanvas('alert', val);
+                    }
                   }
                 }}
-                className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded cursor-pointer"
               />
-              <div className="flex justify-between text-[9px] text-slate-500 mt-1">
-                <span>5cm (CRITICAL COLLISION)</span>
-                <span>200cm (OPEN PATH)</span>
-              </div>
             </div>
+
+            <div className="pt-1">
+              <button
+                onClick={runDiagnosticTest}
+                disabled={isSimulatingDiagnostic}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-[0_0_15px_rgba(0,240,255,0.3)] disabled:opacity-50 cursor-pointer"
+              >
+                <Play className="w-3.5 h-3.5 fill-slate-950" />
+                <span>{isSimulatingDiagnostic ? 'CALCULATING SENSORS...' : 'RUN SENSOR DIAGNOSTIC'}</span>
+              </button>
+            </div>
+
+            <p className="text-[10px] text-slate-400 bg-slate-900/90 p-2 rounded-lg border border-slate-800/80 truncate">
+              {diagnosticLog}
+            </p>
           </div>
         </div>
       </div>
+
+      {/* Bottom Technology Showcase (Core Firmware & Hardware Architecture Stack) */}
+      <div className="mt-14 pt-8 border-t border-slate-800/80">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-2 mb-6">
+          <div>
+            <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest block mb-1">
+              // ARCHITECTURAL STACK //
+            </span>
+            <h3 className="text-xl sm:text-2xl font-bold font-display text-white">
+              ROBOTICS FIRMWARE & HARDWARE STACK
+            </h3>
+          </div>
+          <span className="text-xs font-mono text-slate-400">
+            Microsecond Sonar Ranging • Dual H-Bridge Drivers • OpenCV Neural Vision
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {TECH_CARDS.map((tech) => (
+            <div
+              key={tech.id}
+              className={`p-5 rounded-2xl bg-gradient-to-b ${tech.color} bg-slate-950/80 border ${tech.border} backdrop-blur-md space-y-3 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-xl group font-mono`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 group-hover:scale-110 transition-transform">
+                  {tech.icon}
+                </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900/80 text-slate-400 border border-slate-800">
+                  {tech.category}
+                </span>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-white font-mono tracking-tight group-hover:text-cyan-300 transition-colors">
+                  {tech.name}
+                </h4>
+                <p className="text-xs text-slate-400 leading-relaxed mt-1.5">{tech.description}</p>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-800/60">
+                {tech.tags.map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-cyan-300/90 border border-slate-800"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );

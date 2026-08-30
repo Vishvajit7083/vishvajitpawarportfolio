@@ -71,7 +71,7 @@ export function generateLocalChatReply(message: string): CopilotChatResponse {
 
 1. **Proven Dual-Discipline Expertise**: Seamlessly bridges low-level bare-metal firmware (**Embedded C, ESP32, FreeRTOS**) with higher-level intelligent systems (**Python, OpenCV, Computer Vision**).
 2. **Real Physical Hardware & Kinematics**: Engineered a functional **6-DOF Robotic Arm** with analytical Inverse Kinematics (DH-parameters) and an **IoT Weather Station** with multi-sensor telemetry (BMP180/DHT11).
-3. **Strong Academic Foundation**: Graduated with a **B.Tech in Electronics & Telecommunication Engineering** from **Bharati Vidyapeeth College of Engineering Kolhapur** (CGPA: 8.78 / 10).
+3. **Strong Academic Foundation**: Graduated with a **B.Tech in Electronics & Telecommunication Engineering** from **Bharati Vidyapeeth College of Engineering Kolhapur** (CGPA: 6.5 / 10).
 4. **Verified Industry Simulations**: Accredited by **Deloitte** (Technology Job Simulation) and **Tata** (Data Visualisation Virtual Experience).
 5. **Immediate Impact**: Ready to contribute immediately to Embedded Software, Firmware Development, IoT Architecture, or Robotics Automation roles.`,
       suggestedQuestions: [
@@ -127,9 +127,9 @@ export function generateLocalChatReply(message: string): CopilotChatResponse {
 - **Degree**: Bachelor of Technology (B.Tech) in **Electronics and Telecommunication Engineering**
 - **Institution**: **Bharati Vidyapeeth's College of Engineering, Kolhapur**
 - **Graduation Period**: 2022 – 2026
-- **Academic Score**: Cumulative **CGPA 8.78 / 10.0** (First Class with Distinction)
+- **Academic Score**: Cumulative **CGPA 6.5 / 10.0**
 - **Key Coursework**: Microcontrollers & Embedded Systems, Digital Signal Processing, Control Systems, Embedded Linux, Wireless Sensor Networks, and IoT Architectures.
-- **Verified Credential ID**: \`BVC-BTECH-ENTC-2026-878\``,
+- **Verified Credential ID**: \`BVC-BTECH-ENTC-2026-650\``,
       suggestedQuestions: [
         'What other certifications does he have?',
         'What programming languages does he know?',
@@ -153,7 +153,7 @@ export function generateLocalChatReply(message: string): CopilotChatResponse {
    - *Credential ID*: \`EMB-IND-2024-VLP730\` (2024)
    - *Competencies*: Bare-Metal C, Peripheral Drivers (I2C/SPI/UART), RTOS, Sensor Interfacing.
 4. **B.Tech Degree Certificate & Honors** — **Bharati Vidyapeeth College of Engineering Kolhapur**
-   - *Credential ID*: \`BVC-BTECH-ENTC-2026-878\` (CGPA: 8.78 / 10)`,
+   - *Credential ID*: \`BVC-BTECH-ENTC-2026-650\` (CGPA: 6.5 / 10)`,
       suggestedQuestions: [
         'Open the verified certificate document viewer',
         'Show his technical skills breakdown',
@@ -183,7 +183,7 @@ export function generateLocalChatReply(message: string): CopilotChatResponse {
 
   // Generic intelligent recruiter answer
   return {
-    reply: `Vishwajit Laxman Pawar is an **Electronics & Telecommunication Engineering graduate** (Bharati Vidyapeeth College of Engineering Kolhapur, CGPA 8.78) specializing in:
+    reply: `Vishwajit Laxman Pawar is an **Electronics & Telecommunication Engineering graduate** (Bharati Vidyapeeth College of Engineering Kolhapur, CGPA 6.5) specializing in:
 
 - **Embedded Systems & Firmware**: C, Embedded C, FreeRTOS, ESP32, STM32, I2C/SPI/UART.
 - **IoT & Telemetry**: MQTT, REST, WebSockets, DHT11/BMP180 sensor hubs, low-power deep sleep.
@@ -257,7 +257,7 @@ export function generateLocalJDMatch(jobDescription: string, roleTitle: string):
       `Delivered production-grade ESP32 firmware utilizing dual-core FreeRTOS queues for deterministic sensor telemetry.`,
       `Hands-on experience implementing real-time I2C and SPI peripheral drivers for precision environmental sensors (BMP180, DHT11).`,
       `Built autonomous robotic systems with forward and inverse kinematics mathematics, OpenCV vision, and multi-channel PWM control.`,
-      `Strong academic foundation with B.Tech in Electronics & Telecommunication (CGPA: 8.78 / 10) from Bharati Vidyapeeth College of Engineering Kolhapur.`,
+      `Strong academic foundation with B.Tech in Electronics & Telecommunication (CGPA: 6.5 / 10) from Bharati Vidyapeeth College of Engineering Kolhapur.`,
     ],
     suggestedInterviewQuestions: [
       `How do you synchronize data between Core 0 and Core 1 on the ESP32 without priority inversions?`,

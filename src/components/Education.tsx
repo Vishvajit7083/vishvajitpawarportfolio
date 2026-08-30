@@ -22,6 +22,8 @@ import { certificateManager, StoredCertificate } from '../utils/certificateStore
 import { dataUrlToBlobUrl } from '../utils/pdfHelper';
 import { PDFViewerCanvas } from './PDFViewerCanvas';
 import { CertificateModal } from './CertificateModal';
+import { ScrollReveal } from './ScrollReveal';
+import { TiltCard } from './TiltCard';
 
 export const Education: React.FC = () => {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -196,109 +198,114 @@ export const Education: React.FC = () => {
   return (
     <section id="education" className="relative w-full py-16 sm:py-20 px-4 sm:px-8 max-w-7xl mx-auto z-20">
       {/* Section Header */}
-      <div className="flex items-center gap-3 mb-10">
-        <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
-          <GraduationCap className="w-5 h-5" />
-        </div>
-        <div>
-          <div className="text-xs font-mono text-cyan-400 tracking-widest uppercase">
-            // ACADEMIC_CREDENTIALS
+      <ScrollReveal direction="up">
+        <div className="flex items-center gap-3 mb-10">
+          <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+            <GraduationCap className="w-5 h-5" />
           </div>
-          <h2 className="text-3xl sm:text-4xl font-bold font-display text-white tracking-wide">
-            EDUCATION & DEGREE
-          </h2>
+          <div>
+            <div className="text-xs font-mono text-cyan-400 tracking-widest uppercase">
+              // ACADEMIC_CREDENTIALS
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-bold font-display text-white tracking-wide">
+              EDUCATION & DEGREE
+            </h2>
+          </div>
         </div>
-      </div>
+      </ScrollReveal>
 
       {/* 3D Education Hologram Card */}
-      <div className="glass-panel-glow p-6 sm:p-10 rounded-2xl border border-cyan-500/40 relative shadow-[0_0_40px_rgba(0,240,255,0.15)] overflow-hidden">
-        <div className="cyber-corner-tl" />
-        <div className="cyber-corner-tr" />
-        <div className="cyber-corner-bl" />
-        <div className="cyber-corner-br" />
+      <ScrollReveal direction="up" delay={0.1}>
+        <div className="glass-panel-glow p-6 sm:p-10 rounded-2xl border border-cyan-500/40 relative shadow-[0_0_40px_rgba(0,240,255,0.15)] overflow-hidden">
+          <div className="cyber-corner-tl" />
+          <div className="cyber-corner-tr" />
+          <div className="cyber-corner-bl" />
+          <div className="cyber-corner-br" />
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          {/* Left Column: Education Content */}
-          <div className="lg:col-span-8 space-y-6">
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-cyan-950/80 border border-cyan-400/40 text-cyan-300 text-xs font-mono">
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>BACHELOR OF TECHNOLOGY (B.TECH)</span>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            {/* Left Column: Education Content */}
+            <div className="lg:col-span-8 space-y-6">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-cyan-950/80 border border-cyan-400/40 text-cyan-300 text-xs font-mono">
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>BACHELOR OF TECHNOLOGY (B.TECH)</span>
+                </div>
+
+                <h3 className="text-2xl sm:text-3xl font-bold font-display text-white">
+                  {PERSONAL_INFO.education.degree}
+                </h3>
+
+                <div className="flex flex-wrap items-center gap-3 text-sm font-mono text-cyan-300">
+                  <span className="flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-cyan-400" />
+                    {PERSONAL_INFO.education.institution}
+                  </span>
+                </div>
               </div>
 
-              <h3 className="text-2xl sm:text-3xl font-bold font-display text-white">
-                {PERSONAL_INFO.education.degree}
-              </h3>
+              {/* Metrics Row (Period & CGPA) */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-mono">
+                <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <span className="text-[11px] text-slate-400 block mb-1">ACADEMIC PERIOD</span>
+                  <span className="text-base sm:text-lg font-bold text-white flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-cyan-400" />
+                    {PERSONAL_INFO.education.period}
+                  </span>
+                </div>
 
-              <div className="flex flex-wrap items-center gap-3 text-sm font-mono text-cyan-300">
-                <span className="flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-cyan-400" />
-                  {PERSONAL_INFO.education.institution}
+                <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+                  <span className="text-[11px] text-slate-400 block mb-1">CUMULATIVE CGPA</span>
+                  <span className="text-base sm:text-lg font-bold text-emerald-400 flex items-center gap-1.5">
+                    <Award className="w-4 h-4 text-emerald-400" />
+                    {PERSONAL_INFO.education.cgpa}
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 col-span-2 sm:col-span-1">
+                  <span className="text-[11px] text-slate-400 block mb-1">STATUS</span>
+                  <span className="text-xs sm:text-sm font-bold text-cyan-300 flex items-center gap-1.5 mt-0.5">
+                    <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+                    GRADUATE READY
+                  </span>
+                </div>
+              </div>
+
+              {/* Coursework & Engineering Foundations */}
+              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 font-mono text-xs text-slate-300 space-y-2">
+                <span className="text-cyan-300 font-semibold flex items-center gap-1.5">
+                  <Cpu className="w-3.5 h-3.5" />
+                  FOUNDATIONAL COURSEWORK & SYLLABUS:
                 </span>
+                <p className="leading-relaxed text-slate-300">
+                  {PERSONAL_INFO.education.details}
+                </p>
               </div>
             </div>
 
-            {/* Metrics Row (Period & CGPA) */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 font-mono">
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-                <span className="text-[11px] text-slate-400 block mb-1">ACADEMIC PERIOD</span>
-                <span className="text-base sm:text-lg font-bold text-white flex items-center gap-1.5">
-                  <Calendar className="w-4 h-4 text-cyan-400" />
-                  {PERSONAL_INFO.education.period}
-                </span>
+            {/* Right Column: Floating 3D Graduation Element */}
+            <div className="lg:col-span-4 flex flex-col items-center justify-center relative min-h-[260px]">
+              <div
+                ref={canvasRef}
+                id="education-3d-canvas"
+                className="w-full h-[260px] cursor-grab"
+                title="Interactive 3D Graduation Hologram"
+              />
+              <div className="text-[10px] font-mono text-slate-400 text-center">
+                HOLOGRAPHIC DEGREE SEAL // ENTC 2026
               </div>
-
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-                <span className="text-[11px] text-slate-400 block mb-1">CUMULATIVE CGPA</span>
-                <span className="text-base sm:text-lg font-bold text-emerald-400 flex items-center gap-1.5">
-                  <Award className="w-4 h-4 text-emerald-400" />
-                  {PERSONAL_INFO.education.cgpa}
-                </span>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 col-span-2 sm:col-span-1">
-                <span className="text-[11px] text-slate-400 block mb-1">STATUS</span>
-                <span className="text-xs sm:text-sm font-bold text-cyan-300 flex items-center gap-1.5 mt-0.5">
-                  <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-                  GRADUATE READY
-                </span>
-              </div>
-            </div>
-
-            {/* Coursework & Engineering Foundations */}
-            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 font-mono text-xs text-slate-300 space-y-2">
-              <span className="text-cyan-300 font-semibold flex items-center gap-1.5">
-                <Cpu className="w-3.5 h-3.5" />
-                FOUNDATIONAL COURSEWORK & SYLLABUS:
-              </span>
-              <p className="leading-relaxed text-slate-300">
-                {PERSONAL_INFO.education.details}
-              </p>
-            </div>
-          </div>
-
-          {/* Right Column: Floating 3D Graduation Element */}
-          <div className="lg:col-span-4 flex flex-col items-center justify-center relative min-h-[260px]">
-            <div
-              ref={canvasRef}
-              id="education-3d-canvas"
-              className="w-full h-[260px] cursor-grab"
-              title="Interactive 3D Graduation Hologram"
-            />
-            <div className="text-[10px] font-mono text-slate-400 text-center">
-              HOLOGRAPHIC DEGREE SEAL // ENTC 2026
             </div>
           </div>
         </div>
-      </div>
+      </ScrollReveal>
 
       {/* ========================================================================= */}
       {/* Permanent Accredited Degree Certificate Card */}
       {/* ========================================================================= */}
-      <div
-        id="education-certificate-card"
-        className="glass-panel p-6 sm:p-8 rounded-2xl border border-cyan-500/40 relative shadow-[0_0_35px_rgba(0,240,255,0.15)] overflow-hidden mt-8 space-y-6"
-      >
+      <ScrollReveal direction="up" delay={0.2}>
+        <div
+          id="education-certificate-card"
+          className="glass-panel p-6 sm:p-8 rounded-2xl border border-cyan-500/40 relative shadow-[0_0_35px_rgba(0,240,255,0.15)] overflow-hidden mt-8 space-y-6"
+        >
         <div className="cyber-corner-tl" />
         <div className="cyber-corner-tr" />
         <div className="cyber-corner-bl" />
@@ -439,7 +446,7 @@ export const Education: React.FC = () => {
                   <strong className="text-cyan-300">
                     Bachelor of Technology in Electronics & Telecommunication Engineering
                   </strong>{' '}
-                  with a Cumulative CGPA of <strong className="text-emerald-400">8.78 / 10.0</strong>.
+                  with a Cumulative CGPA of <strong className="text-emerald-400">6.5 / 10.0</strong>.
                 </p>
               </div>
 
@@ -468,8 +475,9 @@ export const Education: React.FC = () => {
           )}
         </div>
       </div>
+    </ScrollReveal>
 
-      <CertificateModal
+    <CertificateModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         initialCertId="edu-cert"

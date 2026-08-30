@@ -17,6 +17,7 @@ import { Footer } from './components/Footer';
 import { ResumeModal } from './components/ResumeModal';
 import { RecruiterFastTrackModal } from './components/RecruiterFastTrackModal';
 import { GlobalVoiceAssistant } from './components/GlobalVoiceAssistant';
+import { CustomCursor } from './components/CustomCursor';
 import { AIEngineeringCopilot } from './components/AIEngineeringCopilot';
 import { AIGuideModal } from './components/AIGuideModal';
 import { Sparkles, Bot, FileCheck2, BookOpen } from 'lucide-react';
@@ -161,6 +162,9 @@ function PortfolioApp() {
 
       {/* Global AI Voice Assistant HUD (OpenRouter / Speech API) */}
       <GlobalVoiceAssistant />
+
+      {/* Cinematic Custom Cursor */}
+      <CustomCursor />
     </div>
   );
 }

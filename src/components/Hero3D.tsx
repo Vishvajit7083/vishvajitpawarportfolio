@@ -1,6 +1,25 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { ArrowDown, FileText, Sparkles, Terminal, Activity, Eye, ShieldAlert, Cpu, Crosshair, Bot } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  ArrowDown,
+  FileText,
+  Sparkles,
+  Terminal,
+  Activity,
+  Eye,
+  ShieldAlert,
+  Cpu,
+  Crosshair,
+  Bot,
+  Radio,
+  Sliders,
+  Zap,
+  Info,
+  CheckCircle2,
+  Layers,
+  X
+} from 'lucide-react';
 import { PERSONAL_INFO } from '../data/portfolioData';
 import { sound } from '../utils/audioEffects';
 import { createRealisticRobot, RealisticRobotInstance } from '../utils/realisticRobotModel';
@@ -12,12 +31,71 @@ interface Hero3DProps {
   onOpenRecruiterBrief?: () => void;
 }
 
-export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, onOpenCopilot, onOpenRecruiterBrief }) => {
+interface RobotHotspot {
+  id: string;
+  label: string;
+  subsystem: string;
+  icon: React.ReactNode;
+  description: string;
+  specs: string[];
+  screenPos: { x: number; y: number }; // percentage from top-left (desktop)
+  accentColor: string;
+}
+
+const HERO_HOTSPOTS: RobotHotspot[] = [
+  {
+    id: 'vision',
+    label: 'VISION OPTIC POD',
+    subsystem: 'Stereo Vision & OpenCV AI',
+    icon: <Eye className="w-4 h-4 text-cyan-400" />,
+    description: 'Dual IMX stereoscopic optical sensor pod delivering 30 FPS OpenCV object detection, HSV blob tracking, and 6D pose triangulation.',
+    specs: ['30 FPS Real-Time Perception', 'Haar Cascade & MobileNet SSD', '532nm Precision Optical Laser'],
+    screenPos: { x: 74, y: 28 },
+    accentColor: '#00f0ff',
+  },
+  {
+    id: 'esp32',
+    label: 'ESP32 MASTER MCU',
+    subsystem: 'Dual-Core FreeRTOS Kernel',
+    icon: <Cpu className="w-4 h-4 text-emerald-400" />,
+    description: 'Tensilica Xtensa dual-core architecture running deterministic 10ms FreeRTOS queues for kinematic coordination and low-latency ISR interrupts.',
+    specs: ['Dual 240MHz Xtensa Cores', 'Deterministic Task Preemption', 'Thread-Safe CAN & UART Queues'],
+    screenPos: { x: 58, y: 52 },
+    accentColor: '#10b981',
+  },
+  {
+    id: 'servos',
+    label: '6-DOF KINEMATICS',
+    subsystem: 'Harmonic Drive Actuators',
+    icon: <Sliders className="w-4 h-4 text-amber-400" />,
+    description: 'Harmonic zero-backlash drive actuators with 14-bit magnetic position feedback and analytical Denavit-Hartenberg kinematic solvers.',
+    specs: ['Zero-Backlash 100:1 Gearbox', '14-Bit Magnetic Encoders', 'Analytical DH Matrix Solvers'],
+    screenPos: { x: 82, y: 64 },
+    accentColor: '#f59e0b',
+  },
+  {
+    id: 'wireless',
+    label: 'WIRELESS GATEWAY',
+    subsystem: 'Dual-Band Wi-Fi & BLE',
+    icon: <Radio className="w-4 h-4 text-purple-400" />,
+    description: 'Integrated 802.11 b/g/n Wi-Fi and BLE 4.2 telemetry module for real-time sensor ingestion, MQTT pub/sub, and over-the-air firmware updates.',
+    specs: ['802.11 b/g/n Station / AP', 'BLE 4.2 GATT Telemetry Server', 'MQTT & WebSocket Live Stream'],
+    screenPos: { x: 62, y: 38 },
+    accentColor: '#a855f7',
+  },
+];
+
+export const Hero3D: React.FC<Hero3DProps> = ({
+  onExploreClick,
+  onOpenResume,
+  onOpenCopilot,
+  onOpenRecruiterBrief,
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isHovering3D, setIsHovering3D] = useState(false);
   const [robotAction, setRobotAction] = useState<string>('AUTONOMOUS PATROL');
-  const [lidarRpm, setLidarRpm] = useState<number>(360);
-  const [coreOutputKw, setCoreOutputKw] = useState<number>(84.6);
+  const [activeHotspot, setActiveHotspot] = useState<RobotHotspot | null>(null);
+  const [powerOnComplete, setPowerOnComplete] = useState(false);
 
   const handleExplore = () => {
     if (onExploreClick) {
@@ -27,6 +105,14 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
       if (el) el.scrollIntoView({ behavior: 'smooth' });
     }
   };
+
+  useEffect(() => {
+    // Initial power-on progressive sequence
+    const timer = setTimeout(() => {
+      setPowerOnComplete(true);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -49,32 +135,33 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.3;
+    renderer.toneMappingExposure = 1.35;
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
-    // 3. Multi-point Studio Rim & Cyber Lighting Setup (Matches Roboto Robot Studio)
-    const ambientLight = new THREE.AmbientLight(0x181028, 2.0);
+    // 3. Multi-point Studio Rim & Cyber Lighting Setup
+    const ambientLight = new THREE.AmbientLight(0x181028, 2.2);
     scene.add(ambientLight);
 
-    // Key Light (Soft White/Cyan from Top-Left)
-    const keyLight = new THREE.DirectionalLight(0xf1f5f9, 3.2);
+    // Key Light
+    const keyLight = new THREE.DirectionalLight(0xf1f5f9, 3.4);
     keyLight.position.set(3.5, 4.5, 4.0);
     keyLight.castShadow = true;
     scene.add(keyLight);
 
-    // Deep Purple / Violet Studio Rim Spotlight (Matches images.jpg backlight)
-    const purpleRimLight = new THREE.SpotLight(0xa855f7, 5.5, 16, Math.PI / 3, 0.5, 1.2);
+    // Deep Purple / Violet Studio Rim Spotlight
+    const purpleRimLight = new THREE.SpotLight(0xa855f7, 5.8, 16, Math.PI / 3, 0.5, 1.2);
     purpleRimLight.position.set(-3.5, 3.0, -2.5);
     scene.add(purpleRimLight);
 
     // Magenta / Violet Ground Floor Glow Pool
-    const floorGlowLight = new THREE.PointLight(0x7c3aed, 4.0, 10);
+    const floorGlowLight = new THREE.PointLight(0x7c3aed, 4.2, 10);
     floorGlowLight.position.set(1.5, -0.8, 0.5);
     scene.add(floorGlowLight);
 
-    // Subtle Cyan Rim Backlight
-    const cyanBackLight = new THREE.DirectionalLight(0x00f0ff, 1.8);
+    // Cyan Rim Backlight
+    const cyanBackLight = new THREE.DirectionalLight(0x00f0ff, 2.2);
     cyanBackLight.position.set(0, 4, -4);
     scene.add(cyanBackLight);
 
@@ -96,7 +183,6 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
     esp32Group.position.set(-1.8, 0.5, -0.6);
     scene.add(esp32Group);
 
-    // PCB substrate
     const circuitPcbMat = new THREE.MeshStandardMaterial({
       color: 0x064e3b,
       metalness: 0.4,
@@ -110,12 +196,12 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
     const glowingPurpleMat = new THREE.MeshStandardMaterial({
       color: 0xa855f7,
       emissive: 0xa855f7,
-      emissiveIntensity: 1.5,
+      emissiveIntensity: 1.6,
     });
     const glowingCyanMat = new THREE.MeshStandardMaterial({
       color: 0x00f0ff,
       emissive: 0x00f0ff,
-      emissiveIntensity: 1.8,
+      emissiveIntensity: 2.0,
     });
 
     const pcbGeo = new THREE.BoxGeometry(0.8, 0.04, 1.2);
@@ -326,7 +412,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
         robotGroup.rotation.y = Math.sin(elapsedTime * 0.6) * 0.18 - 0.15;
       }
 
-      // Roboto Robot Inquisitive Gaze Tracking
+      // Robot Inquisitive Gaze Tracking
       const targetHeadY = mouseX * 0.45;
       const targetHeadX = -mouseY * 0.25 + 0.05;
       const targetHeadZ = -0.22 + (mouseX * 0.12);
@@ -352,12 +438,6 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
 
       // Ambient particle drift
       particleSystem.rotation.y = elapsedTime * 0.02;
-
-      // Update telemetry gauges in state occasionally
-      if (Math.floor(elapsedTime * 10) % 20 === 0) {
-        setCoreOutputKw(+(84.2 + Math.sin(elapsedTime * 3) * 2.8).toFixed(1));
-        setLidarRpm(360 + Math.floor(Math.sin(elapsedTime * 4) * 12));
-      }
 
       renderer.render(scene, camera);
     };
@@ -397,38 +477,164 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
       <div className="absolute inset-0 bg-gradient-to-t from-[#040812] via-transparent to-[#040812]/70 pointer-events-none z-10" />
       <div className="absolute inset-0 bg-gradient-to-r from-[#040812]/90 via-[#040812]/40 to-transparent pointer-events-none z-10" />
 
+      {/* Interactive 3D Component Inspection Hotspot Markers (Desktop) */}
+      <div className="absolute inset-0 pointer-events-none z-20 hidden lg:block overflow-hidden">
+        {HERO_HOTSPOTS.map((hotspot) => {
+          const isActive = activeHotspot?.id === hotspot.id;
+          return (
+            <div
+              key={hotspot.id}
+              style={{
+                top: `${hotspot.screenPos.y}%`,
+                left: `${hotspot.screenPos.x}%`,
+              }}
+              className="absolute pointer-events-auto -translate-x-1/2 -translate-y-1/2"
+            >
+              {/* Hotspot Target Button */}
+              <button
+                id={`hotspot-${hotspot.id}`}
+                onClick={() => {
+                  sound.playClick();
+                  setActiveHotspot(isActive ? null : hotspot);
+                }}
+                onMouseEnter={() => sound.playHover()}
+                className={`relative p-2 rounded-full backdrop-blur-md transition-all duration-300 cursor-pointer group ${
+                  isActive
+                    ? 'bg-cyan-950/90 border border-cyan-400 shadow-[0_0_20px_rgba(0,240,255,0.6)] scale-110'
+                    : 'bg-slate-950/70 border border-slate-700/80 hover:border-cyan-400/80 hover:scale-105'
+                }`}
+                title={`Inspect ${hotspot.label}`}
+              >
+                {/* Ping wave */}
+                <span
+                  className="absolute inset-0 rounded-full animate-ping opacity-40 pointer-events-none"
+                  style={{ backgroundColor: hotspot.accentColor }}
+                />
+
+                <div className="relative flex items-center justify-center">
+                  {hotspot.icon}
+                </div>
+
+                {/* Subsystem Pill Label */}
+                <div className="absolute left-full ml-2.5 top-1/2 -translate-y-1/2 whitespace-nowrap px-2.5 py-1 rounded-md bg-slate-950/85 backdrop-blur-md border border-slate-800 text-[10px] font-mono text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg pointer-events-none flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: hotspot.accentColor }} />
+                  <span>{hotspot.label}</span>
+                </div>
+              </button>
+
+              {/* Connected Holographic Inspection Card */}
+              <AnimatePresence>
+                {isActive && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                    transition={{ duration: 0.25, ease: 'easeOut' }}
+                    className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-72 p-4 rounded-xl bg-slate-950/95 backdrop-blur-xl border border-cyan-500/50 text-left font-mono text-xs shadow-[0_0_30px_rgba(0,240,255,0.25)] z-40 space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                        <span className="text-[11px] font-bold text-white uppercase tracking-tight">
+                          {hotspot.label}
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveHotspot(null);
+                        }}
+                        className="text-slate-400 hover:text-white p-0.5 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
+                      {hotspot.description}
+                    </p>
+
+                    <div className="space-y-1 pt-1.5 border-t border-slate-800/80">
+                      <span className="text-[9px] text-cyan-400 font-semibold uppercase tracking-wider block">
+                        KEY ARCHITECTURAL HIGHLIGHTS:
+                      </span>
+                      {hotspot.specs.map((sp, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5 text-[10px] text-slate-300">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                          <span>{sp}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+      </div>
+
       {/* Hero Content HUD Container */}
       <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-8 w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
         {/* Left Column: Text & Call to Actions */}
-        <div className="lg:col-span-7 space-y-5 text-left">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          className="lg:col-span-7 space-y-5 text-left"
+        >
           {/* Status Indicator */}
-          <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-cyan-950/70 border border-cyan-400/40 text-cyan-300 font-mono text-xs shadow-[0_0_20px_rgba(0,240,255,0.25)]">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+            className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-cyan-950/70 border border-cyan-400/40 text-cyan-300 font-mono text-xs shadow-[0_0_20px_rgba(0,240,255,0.25)]"
+          >
             <span className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
             </span>
             <span className="tracking-wide font-semibold">{PERSONAL_INFO.status}</span>
-          </div>
+          </motion.div>
 
           {/* Main Hero Typography */}
           <div className="space-y-2">
-            <div className="text-sm font-mono tracking-widest text-slate-400 flex items-center gap-2 uppercase">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3, duration: 0.6 }}
+              className="text-sm font-mono tracking-widest text-slate-400 flex items-center gap-2 uppercase"
+            >
               <Terminal className="w-4 h-4 text-cyan-400" />
               <span>ROBOTICS & EMBEDDED ENGINEERING LABORATORY</span>
-            </div>
+            </motion.div>
 
-            <h1 className="text-4xl sm:text-6xl xl:text-7xl font-bold tracking-tight text-[var(--text-primary)] font-display leading-tight sm:leading-none">
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.7 }}
+              className="text-4xl sm:text-6xl xl:text-7xl font-bold tracking-tight text-[var(--text-primary)] font-display leading-tight sm:leading-none"
+            >
               Hi, I'm <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-400 to-purple-500 text-glow-cyan">
                 {PERSONAL_INFO.name}
               </span>
-            </h1>
+            </motion.h1>
 
-            <p className="text-xl sm:text-2xl font-semibold text-[var(--text-secondary)] font-display tracking-wide">
+            <motion.p
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.6 }}
+              className="text-xl sm:text-2xl font-semibold text-[var(--text-secondary)] font-display tracking-wide"
+            >
               {PERSONAL_INFO.title}
-            </p>
+            </motion.p>
 
-            <div className="flex flex-wrap items-center gap-2 pt-1 font-mono text-xs sm:text-sm text-cyan-400">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6, duration: 0.6 }}
+              className="flex flex-wrap items-center gap-2 pt-1 font-mono text-xs sm:text-sm text-cyan-400"
+            >
               <span className="px-2.5 py-1 rounded bg-[var(--chip-bg)] border border-[var(--chip-border)] text-[var(--chip-text)]">
                 Embedded Systems
               </span>
@@ -444,18 +650,29 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
               <span className="px-2.5 py-1 rounded bg-[var(--chip-bg)] border border-[var(--chip-border)] text-[var(--chip-text)]">
                 Robotics
               </span>
-            </div>
+            </motion.div>
           </div>
 
           {/* Brief hook */}
-          <p className="text-sm text-[var(--text-secondary)] leading-relaxed max-w-xl font-mono pt-1">
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.7, duration: 0.6 }}
+            className="text-sm text-[var(--text-secondary)] leading-relaxed max-w-xl font-mono pt-1"
+          >
             Welcome to my 3D Robotics and Embedded Engineering Laboratory. Explore real-time ESP32 hardware telemetry, interactive autonomous robotics, and intelligent edge firmware architectures.
-          </p>
+          </motion.p>
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap items-center gap-4 pt-2">
+          {/* Action Buttons with Magnetic Pull */}
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8, duration: 0.6 }}
+            className="flex flex-wrap items-center gap-4 pt-2"
+          >
             <button
               id="hero-explore-btn"
+              data-magnetic="true"
               onClick={() => {
                 sound.playClick();
                 handleExplore();
@@ -470,6 +687,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
             {onOpenRecruiterBrief && (
               <button
                 id="hero-recruiter-brief-btn"
+                data-magnetic="true"
                 onClick={() => {
                   sound.playClick();
                   onOpenRecruiterBrief();
@@ -485,6 +703,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
             {onOpenCopilot && (
               <button
                 id="hero-copilot-btn"
+                data-magnetic="true"
                 onClick={() => {
                   sound.playClick();
                   onOpenCopilot();
@@ -499,6 +718,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
 
             <button
               id="hero-resume-btn"
+              data-magnetic="true"
               onClick={() => {
                 sound.playClick();
                 onOpenResume();
@@ -509,17 +729,27 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
               <FileText className="w-4 h-4" />
               <span>RESUME</span>
             </button>
-          </div>
+          </motion.div>
 
           {/* 3D Interaction Tooltip helper */}
-          <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)] pt-2">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.0, duration: 0.6 }}
+            className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)] pt-2"
+          >
             <Eye className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Interactive 3D Lab: Drag cursor to rotate robot • Real-time PBR shaders & physics</span>
-          </div>
-        </div>
+            <span>Interactive 3D Lab: Drag to orbit in 360° • Click glowing hotspot markers on robot to inspect subsystems</span>
+          </motion.div>
+        </motion.div>
 
         {/* Right Column: Live Robot Telemetry Widget */}
-        <div className="lg:col-span-5 pointer-events-none flex justify-end">
+        <motion.div
+          initial={{ opacity: 0, x: 30 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.5, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          className="lg:col-span-5 pointer-events-none flex justify-end"
+        >
           <div className="glass-panel p-4 rounded-xl border border-[var(--border-primary)] max-w-xs w-full space-y-3 shadow-[var(--shadow-panel)] backdrop-blur-md hidden sm:block">
             <div className="flex items-center justify-between text-xs font-mono border-b border-[var(--border-subtle)] pb-2">
               <span className="text-purple-400 flex items-center gap-1.5 font-semibold">
@@ -559,7 +789,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({ onExploreClick, onOpenResume, on
               <span>STUDIO: PURPLE RIM</span>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Bottom Scroll Cue */}

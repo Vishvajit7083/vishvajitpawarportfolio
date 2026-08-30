@@ -63,13 +63,13 @@ export const INITIAL_CERTIFICATES: StoredCertificate[] = [
     title: 'Bachelor of Technology (B.Tech) Degree Certificate',
     issuer: 'Bharati Vidyapeeth College of Engineering Kolhapur',
     date: '2022 - 2026',
-    certificateId: 'BVC-BTECH-ENTC-2026-878',
+    certificateId: 'BVC-BTECH-ENTC-2026-650',
     skills: ['Electronics & Telecommunication', 'Embedded Systems Architecture', 'Microcontroller Interfacing', 'Signal Processing & IoT'],
     verificationUrl: '',
     icon: 'GraduationCap',
     badgeType: 'embedded',
     description:
-      'Official Academic B.Tech Degree Certificate & Transcripts for Vishwajit Laxman Pawar (CGPA: 8.78).',
+      'Official Academic B.Tech Degree Certificate & Transcripts for Vishwajit Laxman Pawar (CGPA: 6.5 / 10).',
   },
 ];
 

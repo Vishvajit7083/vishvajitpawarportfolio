@@ -3,6 +3,8 @@ import { Network, Filter, Search, Info, Cpu, Sparkles, Terminal, Layers, CheckCi
 import { SKILLS_DATA } from '../data/portfolioData';
 import { SkillNode } from '../types';
 import { sound } from '../utils/audioEffects';
+import { ScrollReveal } from './ScrollReveal';
+import { TiltCard } from './TiltCard';
 
 type CategoryFilter = 'ALL' | 'Programming' | 'Embedded Systems' | 'AI & Robotics' | 'Hardware' | 'Tools' | 'Operating Systems';
 
@@ -21,7 +23,7 @@ export const SkillsNetwork: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredSkill, setHoveredSkill] = useState<SkillNode | null>(null);
-  const [selectedSkill, setSelectedSkill] = useState<SkillNode>(SKILLS_DATA[1]); // Default to Python or ESP32
+  const [selectedSkill, setSelectedSkill] = useState<SkillNode>(SKILLS_DATA[1]);
   const [viewMode, setViewMode] = useState<'network' | 'grid'>('network');
 
   // Filter skills
@@ -61,8 +63,8 @@ export const SkillsNetwork: React.FC = () => {
         ...skill,
         x: width / 2 + Math.cos(angle) * radius,
         y: height / 2 + Math.sin(angle) * radius,
-        vx: (Math.random() - 0.5) * 0.4,
-        vy: (Math.random() - 0.5) * 0.4,
+        vx: (Math.random() - 0.5) * 0.35,
+        vy: (Math.random() - 0.5) * 0.35,
         baseRadius: 18 + (skill.level / 100) * 8,
       };
     });
@@ -75,7 +77,6 @@ export const SkillsNetwork: React.FC = () => {
       mouseX = e.clientX - rect.left;
       mouseY = e.clientY - rect.top;
 
-      // Find hovered node
       let found: SkillNode | null = null;
       for (const node of nodes) {
         const dx = node.x - mouseX;
@@ -120,7 +121,7 @@ export const SkillsNetwork: React.FC = () => {
 
       ctx.clearRect(0, 0, width, height);
 
-      // Draw subtle cyber grid background inside canvas
+      // Subtle cyber grid background inside canvas
       ctx.strokeStyle = 'rgba(56, 189, 248, 0.04)';
       ctx.lineWidth = 1;
       const gridSize = 36;
@@ -142,7 +143,6 @@ export const SkillsNetwork: React.FC = () => {
         node.x += node.vx;
         node.y += node.vy;
 
-        // Boundaries
         const pad = node.baseRadius + 20;
         if (node.x < pad || node.x > width - pad) node.vx *= -1;
         if (node.y < pad || node.y > height - pad) node.vy *= -1;
@@ -158,30 +158,34 @@ export const SkillsNetwork: React.FC = () => {
           const dist = Math.sqrt(dx * dx + dy * dy);
 
           const isSameCategory = n1.category === n2.category;
+          const isHighlighted =
+            (hoveredSkill && (hoveredSkill.id === n1.id || hoveredSkill.id === n2.id)) ||
+            (selectedSkill && (selectedSkill.id === n1.id || selectedSkill.id === n2.id));
+
           const maxDist = isSameCategory ? 200 : 130;
 
-          if (dist < maxDist) {
-            const alpha = (1 - dist / maxDist) * (isSameCategory ? 0.35 : 0.15);
-            ctx.strokeStyle = isSameCategory ? n1.color : 'rgba(56, 189, 248, 0.3)';
-            ctx.globalAlpha = alpha;
-            ctx.lineWidth = isSameCategory ? 1.5 : 1;
+          if (dist < maxDist || isHighlighted) {
+            const alpha = (1 - dist / (isHighlighted ? 260 : maxDist)) * (isHighlighted ? 0.7 : isSameCategory ? 0.35 : 0.15);
+            ctx.strokeStyle = isHighlighted ? '#00f0ff' : isSameCategory ? n1.color : 'rgba(56, 189, 248, 0.3)';
+            ctx.globalAlpha = Math.max(0.1, alpha);
+            ctx.lineWidth = isHighlighted ? 2.2 : isSameCategory ? 1.5 : 1;
 
             ctx.beginPath();
             ctx.moveTo(n1.x, n1.y);
-            // Draw circuit-style angled or direct lines
             ctx.lineTo(n2.x, n2.y);
             ctx.stroke();
 
             // Circuit pulse electron packet
-            if (isSameCategory && dist > 50) {
-              const packetT = (Math.sin(pulse + i + j) + 1) / 2;
+            if ((isSameCategory || isHighlighted) && dist > 40) {
+              const speedMultiplier = isHighlighted ? 2 : 1;
+              const packetT = (Math.sin(pulse * speedMultiplier + i * 2 + j) + 1) / 2;
               const px = n1.x + dx * packetT;
               const py = n1.y + dy * packetT;
 
-              ctx.fillStyle = n1.color;
-              ctx.globalAlpha = 0.8;
+              ctx.fillStyle = isHighlighted ? '#00f0ff' : n1.color;
+              ctx.globalAlpha = 0.9;
               ctx.beginPath();
-              ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+              ctx.arc(px, py, isHighlighted ? 3.5 : 2.5, 0, Math.PI * 2);
               ctx.fill();
             }
           }
@@ -263,159 +267,168 @@ export const SkillsNetwork: React.FC = () => {
   return (
     <section id="skills" className="relative w-full py-20 px-4 sm:px-8 max-w-7xl mx-auto z-20">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-mono text-cyan-400 tracking-widest uppercase">
-            <Network className="w-4 h-4" />
-            <span>// SKILL_TOPOLOGY_NETWORK</span>
+      <ScrollReveal direction="up">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-mono text-cyan-400 tracking-widest uppercase">
+              <Network className="w-4 h-4" />
+              <span>// SKILL_TOPOLOGY_NETWORK</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-bold font-display text-white tracking-wide mt-1">
+              INTERACTIVE SKILLS CIRCUIT
+            </h2>
+            <p className="text-xs sm:text-sm font-mono text-slate-400 mt-1">
+              Hover over floating nodes or select categories to inspect technical proficiencies & embedded systems relevance.
+            </p>
           </div>
-          <h2 className="text-3xl sm:text-4xl font-bold font-display text-white tracking-wide mt-1">
-            INTERACTIVE SKILLS CIRCUIT
-          </h2>
-          <p className="text-xs sm:text-sm font-mono text-slate-400 mt-1">
-            Hover over floating nodes or select categories to inspect technical proficiencies & embedded systems relevance.
-          </p>
-        </div>
 
-        {/* View Mode Toggle */}
-        <div className="flex items-center gap-2 glass-panel p-1 rounded-xl border border-cyan-500/30">
-          <button
-            id="view-mode-network"
-            onClick={() => {
-              sound.playClick();
-              setViewMode('network');
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all cursor-pointer ${
-              viewMode === 'network'
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-400/50 shadow-[0_0_10px_rgba(0,240,255,0.2)]'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Network className="w-3.5 h-3.5" />
-            <span>3D NETWORK</span>
-          </button>
-          <button
-            id="view-mode-grid"
-            onClick={() => {
-              sound.playClick();
-              setViewMode('grid');
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all cursor-pointer ${
-              viewMode === 'grid'
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-400/50 shadow-[0_0_10px_rgba(0,240,255,0.2)]'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>MATRIX GRID</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Category Pills & Search Controls */}
-      <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 mb-6">
-        {/* Category Pills */}
-        <div className="flex flex-wrap gap-1.5">
-          {CATEGORIES.map((cat) => (
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-2 glass-panel p-1 rounded-xl border border-cyan-500/30">
             <button
-              key={cat}
-              id={`cat-filter-${cat.toLowerCase().replace(/\s+/g, '-')}`}
+              id="view-mode-network"
+              data-magnetic="true"
               onClick={() => {
                 sound.playClick();
-                setSelectedCategory(cat);
+                setViewMode('network');
               }}
-              onMouseEnter={() => sound.playHover()}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-all duration-150 cursor-pointer ${
-                selectedCategory === cat
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400 shadow-[0_0_12px_rgba(0,240,255,0.3)] font-semibold'
-                  : 'bg-slate-900/60 text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-slate-200'
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'network'
+                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-400/50 shadow-[0_0_10px_rgba(0,240,255,0.2)]'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {cat}
+              <Network className="w-3.5 h-3.5" />
+              <span>3D NETWORK</span>
             </button>
-          ))}
+            <button
+              id="view-mode-grid"
+              data-magnetic="true"
+              onClick={() => {
+                sound.playClick();
+                setViewMode('grid');
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-400/50 shadow-[0_0_10px_rgba(0,240,255,0.2)]'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>MATRIX GRID</span>
+            </button>
+          </div>
         </div>
+      </ScrollReveal>
 
-        {/* Search Bar */}
-        <div className="relative min-w-[220px]">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            id="skill-search-input"
-            type="text"
-            placeholder="Search skill (e.g. ESP32, C, OpenCV)..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_10px_rgba(0,240,255,0.2)] placeholder:text-slate-600"
-          />
+      {/* Category Pills & Search Controls */}
+      <ScrollReveal direction="up" delay={0.1}>
+        <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 mb-6">
+          {/* Category Pills */}
+          <div className="flex flex-wrap gap-1.5">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                id={`cat-filter-${cat.toLowerCase().replace(/\s+/g, '-')}`}
+                data-magnetic="true"
+                onClick={() => {
+                  sound.playClick();
+                  setSelectedCategory(cat);
+                }}
+                onMouseEnter={() => sound.playHover()}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-all duration-150 cursor-pointer ${
+                  selectedCategory === cat
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400 shadow-[0_0_12px_rgba(0,240,255,0.3)] font-semibold'
+                    : 'bg-slate-900/60 text-slate-400 border border-slate-800 hover:border-slate-700 hover:text-slate-200'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative min-w-[220px]">
+            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              id="skill-search-input"
+              type="text"
+              placeholder="Search skill (e.g. ESP32, C, OpenCV)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_10px_rgba(0,240,255,0.2)] placeholder:text-slate-600"
+            />
+          </div>
         </div>
-      </div>
+      </ScrollReveal>
 
       {/* Interactive Main Area */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left/Main Visualizer: Canvas Network or Grid */}
-        <div className="lg:col-span-8 glass-panel-glow p-4 rounded-2xl border border-cyan-500/30 overflow-hidden relative min-h-[460px] flex flex-col">
-          <div className="cyber-corner-tl" />
-          <div className="cyber-corner-tr" />
-          <div className="cyber-corner-bl" />
-          <div className="cyber-corner-br" />
+        <ScrollReveal direction="up" delay={0.15} className="lg:col-span-8">
+          <div className="glass-panel-glow p-4 rounded-2xl border border-cyan-500/30 overflow-hidden relative min-h-[460px] flex flex-col">
+            <div className="cyber-corner-tl" />
+            <div className="cyber-corner-tr" />
+            <div className="cyber-corner-bl" />
+            <div className="cyber-corner-br" />
 
-          {viewMode === 'network' ? (
-            <div className="relative w-full flex-1 flex items-center justify-center">
-              <canvas
-                ref={canvasRef}
-                className="w-full h-full cursor-crosshair rounded-xl block"
-              />
-              <div className="absolute bottom-2 left-3 text-[10px] font-mono text-slate-400 pointer-events-none flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                <span>ACTIVE NODES: {filteredSkills.length} // DRAG & HOVER TO INSPECT</span>
+            {viewMode === 'network' ? (
+              <div className="relative w-full flex-1 flex items-center justify-center">
+                <canvas
+                  ref={canvasRef}
+                  className="w-full h-full cursor-crosshair rounded-xl block"
+                />
+                <div className="absolute bottom-2 left-3 text-[10px] font-mono text-slate-400 pointer-events-none flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                  <span>ACTIVE NODES: {filteredSkills.length} // DRAG & HOVER TO INSPECT</span>
+                </div>
               </div>
-            </div>
-          ) : (
-            /* Matrix Grid View */
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-2 overflow-y-auto max-h-[460px]">
-              {filteredSkills.map((skill) => {
-                const isSelected = activeFocusSkill?.id === skill.id;
-                return (
-                  <button
-                    key={skill.id}
-                    id={`skill-card-${skill.id}`}
-                    onClick={() => {
-                      sound.playClick();
-                      setSelectedSkill(skill);
-                    }}
-                    onMouseEnter={() => {
-                      sound.playHover();
-                      setHoveredSkill(skill);
-                    }}
-                    className={`p-3 rounded-xl border text-left font-mono transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-cyan-950/80 border-cyan-400 shadow-[0_0_15px_rgba(0,240,255,0.3)]'
-                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
-                        {skill.category}
-                      </span>
-                      <span className="text-xs font-bold text-cyan-300">{skill.level}%</span>
-                    </div>
-                    <div className="text-sm font-semibold text-white">{skill.name}</div>
-                    <div className="w-full bg-slate-950 rounded-full h-1 mt-2 overflow-hidden">
-                      <div
-                        className="h-full bg-cyan-400 rounded-full"
-                        style={{ width: `${skill.level}%` }}
-                      />
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+            ) : (
+              /* Matrix Grid View */
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-2 overflow-y-auto max-h-[460px]">
+                {filteredSkills.map((skill) => {
+                  const isSelected = activeFocusSkill?.id === skill.id;
+                  return (
+                    <button
+                      key={skill.id}
+                      id={`skill-card-${skill.id}`}
+                      onClick={() => {
+                        sound.playClick();
+                        setSelectedSkill(skill);
+                      }}
+                      onMouseEnter={() => {
+                        sound.playHover();
+                        setHoveredSkill(skill);
+                      }}
+                      className={`p-3 rounded-xl border text-left font-mono transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-cyan-950/80 border-cyan-400 shadow-[0_0_15px_rgba(0,240,255,0.3)]'
+                          : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
+                          {skill.category}
+                        </span>
+                        <span className="text-xs font-bold text-cyan-300">{skill.level}%</span>
+                      </div>
+                      <div className="text-sm font-semibold text-white">{skill.name}</div>
+                      <div className="w-full bg-slate-950 rounded-full h-1 mt-2 overflow-hidden">
+                        <div
+                          className="h-full bg-cyan-400 rounded-full"
+                          style={{ width: `${skill.level}%` }}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </ScrollReveal>
 
-        {/* Right Column: Dynamic Holographic Node Tooltip / Explanatory Panel */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="glass-panel p-6 rounded-2xl border border-cyan-500/40 relative space-y-4 shadow-[0_0_30px_rgba(0,240,255,0.1)]">
+        {/* Right Column: Dynamic Holographic Node Tooltip / Explanatory Panel with 3D Tilt */}
+        <ScrollReveal direction="up" delay={0.25} className="lg:col-span-4">
+          <TiltCard maxTilt={6} className="glass-panel p-6 rounded-2xl border border-cyan-500/40 relative space-y-4 shadow-[0_0_30px_rgba(0,240,255,0.1)]">
             <div className="cyber-corner-tl" />
             <div className="cyber-corner-tr" />
             <div className="cyber-corner-bl" />
@@ -469,8 +482,8 @@ export const SkillsNetwork: React.FC = () => {
               <span>STATUS: INTEGRATED</span>
               <span>DOMAIN: HARDWARE/FIRMWARE</span>
             </div>
-          </div>
-        </div>
+          </TiltCard>
+        </ScrollReveal>
       </div>
     </section>
   );
